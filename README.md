@@ -57,6 +57,8 @@ people10_usecase/
 │   ├── workflows/                   # CI + CD per artefact + drift + release
 │   ├── CODEOWNERS, dependabot.yml, SECURITY.md, ISSUE_TEMPLATE/, pull_request_template.md
 ├── Makefile                        # one-command dev: make test, make lint, make smoke, make ci-local
+├── TODO.md                         # working list — what's next, what's parked, what I'm uncertain about
+├── .env.example                    # template for local dev env vars
 └── poc/
     ├── README.md                    # how to run the PoC + folder-structure rationale
     ├── databricks/
@@ -77,8 +79,9 @@ people10_usecase/
 2. Read [`docs/02_design_document.md`](docs/02_design_document.md) end-to-end (~25 min) for the migration story, layer-by-layer design, decision trade-offs, and quantified outcomes.
 3. Skim [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md) — Azure-best-practice GitHub Actions + SDLC mapping.
 4. Walk the PoC: [`poc/README.md`](poc/README.md) explains what's built vs mocked and how to run on Databricks Community Edition.
-5. Read [`qa/qa_pass_report.md`](qa/qa_pass_report.md) for the release-candidate QA outcome and sign-off.
-6. [`docs/03_presentation_deck_outline.md`](docs/03_presentation_deck_outline.md) is the 12-slide walkthrough script for the live review.
+5. Read [`qa/qa_pass_report.md`](qa/qa_pass_report.md) for the release-candidate QA outcome and sign-off (note §2.1 for honest caveats on the "passed" results).
+6. [`docs/03_presentation_deck_outline.md`](docs/03_presentation_deck_outline.md) is the 12-slide walkthrough script. [`docs/06_demo_walkthrough.md`](docs/06_demo_walkthrough.md) is the live keyboard-cheat-sheet for the actual demo.
+7. [`TODO.md`](TODO.md) shows what I'd do next if I had more time — including the things I'm uncertain about.
 
 ## Headline outcomes (locked metrics referenced throughout)
 

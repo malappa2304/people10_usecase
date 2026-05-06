@@ -13,7 +13,9 @@
 
 ## 1. Executive summary
 
-This is the QA review for the inaugural release of the Chandan Aerospace lakehouse — the foundation cut that enables the Strangler Fig migration to begin. **94 test cases** were planned across 7 suites; **88 passed**, **3 failed**, **2 are deferred**, **1 was blocked by environment**. After triage, **all 3 failures are non-blocking** (Medium-severity environment artefacts that we do not consider release-stoppers under the documented exit criteria) and the deferred items are already on the next-release backlog.
+This is the QA review for the inaugural release of the Chandan Aerospace lakehouse — the foundation cut that enables the Strangler Fig migration to begin. **94 test cases** were planned across 7 suites; **88 passed**, **3 failed**, **2 are deferred**, **1 was blocked by environment**. After triage, all 3 failures are non-blocking (Medium-severity environment artefacts that we don't consider release-stoppers under the documented exit criteria) and the deferred items are on the next-release backlog.
+
+A few of the "passed" results carry honest caveats — see §2.1. Worth reading before you read the recommendation.
 
 **Recommendation: APPROVE for promotion to prod under the standard 2-reviewer environment gate.** Sign-off block at §7.
 
@@ -41,6 +43,16 @@ Coverage: every Critical case planned was executed; pass rate on Critical = **10
 | TC-DQ-009 | DQ | Medium | 3-sigma row-count anomaly detector raised on day-1 baseline | Detector uses 30-day rolling window; TEST only has 14 days of history | **Accept** — expected during bootstrap; converges by day 30 | [#418](https://github.com/malappa2304/people10_usecase/issues/418) |
 
 No Critical or High failures.
+
+### 2.1 Honest caveats on the "passed" results
+
+A few pass results are softer than the green tick suggests. Calling them out so a reviewer reading this report knows what's measured vs what's extrapolated:
+
+- **TC-PF-001 streaming throughput** — sustained 12.6 K eps was measured over **1 hour**, not the full **4-hour** target. The test cluster hit a Databricks workspace per-cluster concurrency limit at the 60-minute mark. I'm confident this scales — the per-partition throughput stayed flat throughout the hour and the bottleneck was the test fixture, not the pipeline — but I'm calling this an *extrapolation*, not a proof. Re-running on a higher-tier cluster is in the next-iteration backlog.
+- **TC-PF-007 50-concurrent-user BI test** — JMeter ran from a single agent VM and may underestimate true network-path latency to Synapse Dedicated. p95 = 4.1 sec is real for the synthetic workload; it's a useful lower bound, not a guarantee against real-user network overhead.
+- **TC-CP-013 audit dry-run** — the 3.5 days was internal team dry-run, not a third-party AS9100 auditor walking the platform. Real audits surface things internal dry-runs don't. I'd want a Boeing-side audit-readiness review before claiming the 6-week → 4-day improvement on a customer call.
+
+None of these change the sign-off recommendation; they are the kind of thing the reviewer should know we know about.
 
 ## 3. Deferred items (next release)
 
