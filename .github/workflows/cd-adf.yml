@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve-env.outputs.environment }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: azure/login@v2
         with:
@@ -96,7 +96,7 @@ jobs:
       RG:  ${{ needs.resolve-env.outputs.rg }}
       ADF: ${{ needs.resolve-env.outputs.adf }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: azure/login@v2
         with:
