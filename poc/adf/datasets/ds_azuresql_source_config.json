@@ -1,0 +1,10 @@
+{
+  "name": "ds_azuresql_source_config",
+  "properties": {
+    "description": "Control-plane Azure SQL — holds source_config, dq_rules, synapse_load_config, audit views.",
+    "linkedServiceName": { "referenceName": "ls_azuresql_control", "type": "LinkedServiceReference" },
+    "type": "AzureSqlTable",
+    "schema": [],
+    "typeProperties": { "schema": "dbo", "table": "source_config" }
+  }
+}

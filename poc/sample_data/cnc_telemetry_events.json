@@ -1,0 +1,10 @@
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A07","event_ts":"2026-05-06T08:00:00Z","vibration_g":0.42,"temperature_c":68.1,"spindle_rpm":8200.0,"feed_rate_mm_min":1450.0,"tool_id":"TL-44"}
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A07","event_ts":"2026-05-06T08:00:01Z","vibration_g":0.45,"temperature_c":68.4,"spindle_rpm":8200.0,"feed_rate_mm_min":1450.0,"tool_id":"TL-44"}
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A07","event_ts":"2026-05-06T08:00:02Z","vibration_g":0.51,"temperature_c":68.7,"spindle_rpm":8210.0,"feed_rate_mm_min":1452.0,"tool_id":"TL-44"}
+{"plant_code":"BLR-2","machine_id":"CNC-BLR2-B11","event_ts":"2026-05-06T08:00:00Z","vibration_g":0.38,"temperature_c":62.0,"spindle_rpm":7500.0,"feed_rate_mm_min":1100.0,"tool_id":"TL-12"}
+{"plant_code":"BLR-2","machine_id":"CNC-BLR2-B11","event_ts":"2026-05-06T08:00:01Z","vibration_g":0.40,"temperature_c":62.3,"spindle_rpm":7510.0,"feed_rate_mm_min":1100.0,"tool_id":"TL-12"}
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A07","event_ts":"2026-05-06T08:01:00Z","vibration_g":0.93,"temperature_c":74.2,"spindle_rpm":8190.0,"feed_rate_mm_min":1450.0,"tool_id":"TL-44"}
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A07","event_ts":"2026-05-06T08:01:01Z","vibration_g":1.08,"temperature_c":75.0,"spindle_rpm":8180.0,"feed_rate_mm_min":1450.0,"tool_id":"TL-44"}
+{"plant_code":"NOI-4","machine_id":"CNC-NOI4-D03","event_ts":"2026-05-06T08:01:00Z","vibration_g":0.31,"temperature_c":58.0,"spindle_rpm":6800.0,"feed_rate_mm_min":900.0,"tool_id":"TL-07"}
+{"plant_code":"PUN-3","machine_id":"CNC-PUN3-C02","event_ts":"2026-05-06T08:01:00Z","vibration_g":0.36,"temperature_c":60.5,"spindle_rpm":7200.0,"feed_rate_mm_min":1000.0,"tool_id":"TL-19"}
+{"plant_code":"HYD-1","machine_id":"CNC-HYD1-A08","event_ts":"2026-05-06T08:01:00Z","vibration_g":0.49,"temperature_c":67.8,"spindle_rpm":8000.0,"feed_rate_mm_min":1400.0,"tool_id":"TL-22"}

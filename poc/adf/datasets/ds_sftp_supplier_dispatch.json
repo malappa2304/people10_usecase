@@ -1,0 +1,23 @@
+{
+  "name": "ds_sftp_supplier_dispatch",
+  "properties": {
+    "description": "Supplier SFTP dataset — sourceId selects the right SFTP linked service variant.",
+    "linkedServiceName": { "referenceName": "ls_sftp_supplier", "type": "LinkedServiceReference" },
+    "parameters": {
+      "sourceId": { "type": "Int" },
+      "fileName": { "type": "String", "defaultValue": "*" }
+    },
+    "type": "DelimitedText",
+    "typeProperties": {
+      "location": {
+        "type": "SftpLocation",
+        "fileName":   { "value": "@dataset().fileName", "type": "Expression" },
+        "folderPath": "/outbound/dispatch"
+      },
+      "columnDelimiter": ",",
+      "escapeChar": "\\",
+      "firstRowAsHeader": true,
+      "quoteChar": "\""
+    }
+  }
+}
