@@ -1,19 +1,29 @@
 # People10 PoC — Cloud-Native Data Platform on Azure
 
-A 3-day take-home for the People10 Solutions Lab brief. End-to-end design + working prototype on Azure (ADLS Gen2 · Databricks · Delta Lake · Synapse) showing how a modern lakehouse unifies streaming and batch, supports analytics, and prepares data for AI/ML.
+Hi, I'm Malappa. This is my take-home for the People10 Solutions Lab brief — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
 
-— Malappa
+The brief is generic ("a modern data platform"), so I picked manufacturing as the use case because it gave me realistic streaming + batch flows to demonstrate. The architecture choices, trade-offs, and trade-off rationale are all mine to defend.
+
+If you're a reviewer, the most useful 5 minutes are the [architecture diagram](docs/01_architecture_diagram.md) and the [executive summary](docs/02_design_document.md#1-executive-summary). The most useful 20 minutes adds the design doc end-to-end and a walk through the [unified DLT pipeline](poc/databricks/pipelines/unified_medallion_dlt.py).
 
 ---
 
-## How to read this in 20 minutes
+## How I spent the 3 days
+
+A quick honest log so a reviewer can see where the time actually went. Not a project plan — just what I worked on.
+
+- **Day 1 (~6 hrs).** Read the brief twice. Settled on Azure within the first hour because the brief allowed any cloud and I know it best. Sketched the medallion architecture and drafted the design doc skeleton. Most of the time went into reasoning out the medallion + Delta Lake choice and the trade-off table. Picked manufacturing as the use case so streaming + batch flows would be concrete.
+- **Day 2 (~7 hrs).** Built the runnable pieces. The DLT pipeline took the longest — getting `apply_changes` and the streaming + batch unification right in one DAG was the part that needed the most care. Wrote the imperative notebooks with the `PipelineRun` audit chassis. Got bitten by SAP timezone normalisation; explicit `to_utc_timestamp(col, tz)` per row fixed it. Wrote the unit tests at the end of the day.
+- **Day 3 (~5 hrs).** Polish. Mermaid architecture diagram, Synapse DDL + analytics queries, CI workflow with the right shape, the TODO. Then a thorough QA pass that surfaced a YAML syntax bug and a handful of stale cross-references after I'd trimmed earlier drafts.
+
+Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed in [`TODO.md`](TODO.md).
+
+## How to read this
 
 1. **[`docs/01_architecture_diagram.md`](docs/01_architecture_diagram.md)** — one diagram, 1 minute.
 2. **[`docs/02_design_document.md`](docs/02_design_document.md)** — design covering the brief's 7 key areas, ~10 minutes.
 3. **[`poc/databricks/pipelines/unified_medallion_dlt.py`](poc/databricks/pipelines/unified_medallion_dlt.py)** — the central demo, ~5 minutes. One DLT pipeline ingests **streaming** (Event Hubs) **and** **batch** (Auto Loader) into the same medallion. This is the unification claim made literal.
 4. **[`TODO.md`](TODO.md)** — what I'd do next if I had more time, and what I'm uncertain about.
-
-If you only have 5 minutes: read the diagram and the design-doc executive summary.
 
 ## What the brief asked for, and where it's covered
 
@@ -43,8 +53,7 @@ people10_usecase/
 ├── poc/
 │   ├── databricks/
 │   │   ├── pipelines/          # DLT — unified streaming + batch
-│   │   │   ├── unified_medallion_dlt.py
-│   │   │   └── README.md       # short note: when to use pipelines/ vs notebooks/
+│   │   │   └── unified_medallion_dlt.py
 │   │   ├── notebooks/          # imperative PySpark with PipelineRun audit chassis
 │   │   │   ├── 01_bronze_to_silver_production_order.py
 │   │   │   ├── 02_scd2_dim_material.py
@@ -104,25 +113,15 @@ The fastest way to walk the notebook code end-to-end without standing up cloud i
 
 6. Run the notebooks in order: `01` → `02` → `04`. Optionally deploy the DLT pipeline via `databricks bundle deploy --target dev` after pointing `databricks.yml` at your CE workspace.
 
-## Honest scope (what runs vs what doesn't)
+## What runs vs what doesn't
 
-This is what 3 focused days produces. Some things are working code; some are designed-but-not-provisioned. Calling out the line:
+The line between "I built it" and "I designed it" matters, so I'm being explicit.
 
-**Working and runnable**
+**Runs end-to-end:** the three notebooks under `poc/databricks/notebooks/` against the sample data on Databricks Community Edition; the unified DLT pipeline once the bundle is deployed; the `pytest` suite with ≥ 80% coverage on the production library; CI on every PR.
 
-- All 3 notebooks under `poc/databricks/notebooks/` run on Databricks Community Edition with the supplied sample data
-- The DLT pipeline `unified_medallion_dlt.py` is wired into the Databricks Asset Bundle and runs in any Databricks workspace with the bundle deployed
-- `pytest` suite passes with ≥ 80% coverage on `poc/databricks/lib/`
-- CI workflow runs lint + tests + Terraform validate + gitleaks on every PR
+**Designed but not provisioned:** the Synapse Dedicated pool (DDL is ready, no pool in the take-home env to apply against), the Cosmos DB online feature store (pattern in design doc §6, IaC not written), Microsoft Purview lineage scans (referenced, not wired), the rest of the Terraform networking + Synapse + monitoring modules (the foundation is in `main.tf` — each missing module would be ~50 lines).
 
-**Designed, not provisioned**
-
-- Synapse Dedicated pool — DDL is written, not run end-to-end (no Synapse pool in the take-home env)
-- Cosmos DB online feature store — pattern is in design doc §6, IaC isn't there
-- Microsoft Purview — referenced for lineage; scan config not wired
-- Most Terraform modules — `main.tf` has the foundation; networking + Synapse + monitoring would each be ~50 lines I haven't written
-
-The TODO list in [`TODO.md`](TODO.md) is the honest "what's next" — read it alongside this README.
+[`TODO.md`](TODO.md) is the honest "what's next" — read it alongside this README. I'd rather flag a gap than smooth over it.
 
 ## Things I'd like to talk about in the review
 

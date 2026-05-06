@@ -1,26 +1,28 @@
 ###############################################################################
-# CI — production-grade quality gates, sized for a PoC.
+# CI — what runs on every PR.
 #
-# What this workflow does on every PR and push to dev:
-#   1. PR title check — Conventional Commits enforcement (PRs only)
-#   2. Path-filtered jobs — only run a check when files in scope changed
-#   3. Lint Python — ruff check + format-check + mypy --strict on the lib
-#   4. Unit tests — pytest + chispa with a >=80% coverage gate on the lib
-#   5. Python security — pip-audit on the test dependency closure
-#   6. IaC validate — terraform fmt + validate
-#   7. Secret scan — gitleaks across the full diff
-#   8. CI summary — single status posted to the PR
+# I wanted production-shape quality gates without bloating this file.
+# Each job earns its keep:
 #
-# Patterns demonstrated (production-grade), called out for the reviewer:
-#   - Permissions least-privilege per job (top-level read-only; jobs declare more)
-#   - Concurrency: cancel-in-progress on PRs, never on dev branch
-#   - Path filters via dorny/paths-filter so unrelated changes don't pay for
-#     unrelated jobs
-#   - SHA pinning is a production hardening step. For a PoC I pin to major
-#     version tags; the next step is `step-security/harden-runner` plus
-#     dependabot-managed SHA bumps. See design doc §8.1.
-#   - GITHUB_STEP_SUMMARY is written so the PR view shows a single summary
-#     instead of hunting through job logs.
+#   pr-title           Conventional Commits, so the changelog is auto-buildable
+#   changes            path filter — doc-only PRs don't pay for terraform jobs
+#   lint-python        ruff + mypy --strict on the lib (notebooks are too lenient
+#                      for --strict; that's a deliberate scope)
+#   python-tests       pytest + chispa, coverage gate on the lib only
+#   python-security    pip-audit on the test deps. In production this would
+#                      point at requirements.lock or pyproject.toml
+#   terraform-validate fmt + validate. tflint / checkov are the next step
+#   secret-scan        gitleaks over full history
+#   ci-summary         one table to GITHUB_STEP_SUMMARY so the PR view doesn't
+#                      need digging through job logs
+#
+# A few choices I'd defend in a review:
+#   - Top-level permissions: contents: read. Jobs widen as they need to.
+#   - Concurrency cancels in-progress on PRs, never on dev. Half a CI run
+#     on dev wastes more than it saves.
+#   - Actions are pinned to major version. SHA pinning is the next supply-
+#     chain step (with step-security/harden-runner); Dependabot is wired
+#     to drive the bumps. See design doc §8.1.
 ###############################################################################
 
 name: CI
