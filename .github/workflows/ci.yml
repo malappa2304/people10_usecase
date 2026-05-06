@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload Checkov SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: poc/infrastructure/terraform/checkov.sarif
           category: checkov
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload tfsec SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: poc/infrastructure/terraform/tfsec.sarif
           category: tfsec
