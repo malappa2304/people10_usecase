@@ -99,11 +99,18 @@ I made the call to use ADF as the *master* orchestrator instead of Synapse Pipel
 
 ### 6.2 Processing & transformation (Databricks)
 
-Bronze → Silver: PySpark notebooks, scheduled by ADF via `DatabricksNotebookActivity`. Heavy lifting is here — SAP timezone normalization (we hit a war story where the same `posting_date` showed up as IST or UTC depending on which SAP instance, and our material ledger reconciliation was off by 5 h 30 m for two days), MES dedup with composite keys, supplier file parsing with schema-on-read.
+The platform deliberately runs **two complementary patterns** and uses each where it earns its keep.
 
-Silver → Gold: **Delta Live Tables** declarative pipelines with built-in `EXPECT` constraints. DLT is a deliberate choice over more PySpark: declarative readability for the team, free expectations infra for DQ, and one-button restart on failure.
+**Pattern A — Declarative DLT pipelines** (`poc/databricks/pipelines/unified_medallion_dlt.py`). One Lakeflow Declarative Pipeline ingests **streaming** CNC telemetry (Event Hubs Kafka API) **and** **batch** SAP files (Auto Loader on JSON) into the *same* medallion. Bronze, Silver, and a Gold materialised view that joins streaming-derived telemetry rollups with batch-derived production-order context all live in **one** pipeline DAG. This is the canonical Databricks pattern for the brief's "unify streaming and batch data" requirement: the framework treats files-arriving and events-arriving as a single computation model, `apply_changes` gives us SCD2 directly from CDC events with built-in replay-safety, and the three DLT severity tiers (`expect_or_fail` / `expect_or_drop` / `expect`) cover BLOCK / QUARANTINE / WARN inline. Lineage, autoscaling, retries, and the event log fall out of the framework — no extra plumbing.
 
-**SCD2.** Hash-based, not source CDC for dimensions. We compute a SHA-256 over a canonical projection of attributes, compare against current row's hash, expire and insert on mismatch. Source CDC was on the table (and is what Informatica used for `dim_material`) but it ties Silver to source change-tracking quirks; hash-based SCD is source-agnostic and lets us replay from Bronze. (`poc/databricks/lib/scd_helpers.py`.)
+**Pattern B — Imperative PySpark notebooks** (`poc/databricks/notebooks/01_*` … `05_*`). Bronze → Silver scheduled by ADF via `DatabricksNotebookActivity`. We keep this pattern for the cases where DLT isn't a fit:
+- The explicit `PipelineRun` audit chassis (lock + watermark + structured audit row in `audit.pipeline_run`) — AS9100 evidence we control row-by-row.
+- SAP-specific transformations needing full PySpark control. War story: SAP `posting_date` showed up as IST or UTC depending on instance, breaking material-ledger reconciliation by 5 h 30 m for two days. Schema-on-read with explicit per-column timezone handling solved it.
+- Spark Structured Streaming features DLT doesn't surface yet (custom RocksDB state config, advanced `foreachBatch` idempotency — see `04_streaming_cnc_telemetry.py`).
+
+The choice rule for new work is one decision tree: *can this be expressed as `@dlt.table` + `expect`s + `apply_changes`?* If yes, write it in `pipelines/`. If no, write it in `notebooks/` with `PipelineRun`. The PoC keeps both deliberately so the panel sees the right-tool-for-the-job instinct, not just one default.
+
+**SCD2.** Two implementations available — `dlt.apply_changes` inside the DLT pipeline (replay-safe, lineage automatic), and a hand-rolled hash-based merge in `poc/databricks/lib/scd_helpers.py` for the imperative path. Both are source-agnostic and can replay from Bronze. We ruled out source CDC for dimensions because it ties Silver to source change-tracking quirks; the hand-rolled hash version is what Informatica used for `dim_material` and what we used for the like-for-like reconciliation during migration.
 
 **Compute.** Photon engine + AQE on every job. Spot instances on workers for non-critical batch (50% compute savings; we accept occasional preemption). Autoscaling pools per environment. War story: small-file problem on IoT Bronze made a 47-min query — a `OPTIMIZE ... ZORDER BY (machine_id, event_ts)` on the Bronze stream sink got it to 22 sec. Skewed joins on `supplier_id` (one supplier, ~40% of rows) — salting on `supplier_id` × 8 took a 90-min Gold build to 11 min.
 

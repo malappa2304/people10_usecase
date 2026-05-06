@@ -31,9 +31,13 @@ people10_usecase/
 ├── .github/
 │   ├── workflows/                   # CI + CD per artefact + drift + release
 │   ├── CODEOWNERS, dependabot.yml, SECURITY.md, ISSUE_TEMPLATE/, pull_request_template.md
+├── Makefile                        # one-command dev: make test, make lint, make smoke, make ci-local
 └── poc/
-    ├── README.md                    # how to run the PoC
-    ├── databricks/                  # PySpark notebooks + reusable lib
+    ├── README.md                    # how to run the PoC + folder-structure rationale
+    ├── databricks/
+    │   ├── pipelines/               # declarative DLT pipelines (streaming + batch unified)
+    │   ├── notebooks/                # imperative PySpark with PipelineRun audit chassis
+    │   └── lib/                      # reusable Python (PipelineRun, SCD2, recon, readers)
     ├── adf/                         # ADF pipelines, linked services, datasets, triggers
     ├── synapse/                     # DDL + analytics SQL
     ├── infrastructure/              # Terraform + Bicep
@@ -74,8 +78,8 @@ Quick index a reviewer can use to walk the brief's checklist against this repo:
 
 | # | Key area from the brief | Where covered |
 | - | -- | -- |
-| 1 | Batch & streaming ingestion design | Design [§6.1](docs/02_design_document.md) · ADF master + 4 child pipelines [`poc/adf/pipelines/`](poc/adf/pipelines/) · Streaming notebook [`04_streaming_cnc_telemetry.py`](poc/databricks/notebooks/04_streaming_cnc_telemetry.py) · Reader factory [`format_readers.py`](poc/databricks/lib/format_readers.py) · QA TC-IT-001..008, TC-PF-001..003 |
-| 2 | Data processing & transformation strategy | Design [§6.2](docs/02_design_document.md) · 5 notebooks under [`poc/databricks/notebooks/`](poc/databricks/notebooks/) · Reusable lib [`poc/databricks/lib/`](poc/databricks/lib/) — `PipelineRun`, `scd_helpers`, `reconciliation` · QA TC-FN-001..026 |
+| 1 | Batch & streaming ingestion design | Design [§6.1](docs/02_design_document.md) · **Unified DLT pipeline** [`unified_medallion_dlt.py`](poc/databricks/pipelines/unified_medallion_dlt.py) — *one* pipeline ingesting Event Hubs streaming **and** Auto Loader batch into the same medallion · ADF master + 4 child pipelines [`poc/adf/pipelines/`](poc/adf/pipelines/) · Imperative streaming notebook [`04_streaming_cnc_telemetry.py`](poc/databricks/notebooks/04_streaming_cnc_telemetry.py) · Reader factory [`format_readers.py`](poc/databricks/lib/format_readers.py) · QA TC-IT-001..008, TC-PF-001..003 |
+| 2 | Data processing & transformation strategy | Design [§6.2](docs/02_design_document.md) — **two complementary patterns** (declarative DLT + imperative PySpark) with an explicit decision rule · DLT: [`pipelines/`](poc/databricks/pipelines/) (with `apply_changes` SCD2 + 3-tier expectations inline) · PySpark: 5 notebooks under [`notebooks/`](poc/databricks/notebooks/) with the `PipelineRun` audit chassis · Reusable lib [`lib/`](poc/databricks/lib/) · QA TC-FN-001..026 |
 | 3 | Storage architecture (lake / lakehouse / warehouse) | Design [§6.3 + §6.4 + §4.1](docs/02_design_document.md) · ADLS Gen2 [`adls.tf`](poc/infrastructure/terraform/adls.tf) · Synapse DDL [`poc/synapse/ddl/`](poc/synapse/ddl/) (HASH/REPLICATE distributions, columnstore, monthly partitioning) |
 | 4 | Cloud-native services & scalability | Design [§4.1](docs/02_design_document.md) consolidating cloud-native services + scalability per layer · QA TC-PF-001..012 (12K eps streaming, 38-min batch, 50+ concurrent BI) |
 | 5 | Data quality, governance & security | Design [§6.6 + §8](docs/02_design_document.md) · DQ runner [`05_dq_runner.py`](poc/databricks/notebooks/05_dq_runner.py) + [`dq_rules_seed.sql`](poc/config/dq_rules_seed.sql) · Security IaC [`networking.tf`](poc/infrastructure/terraform/networking.tf) (PE/NSG) · QA suites [04 security](qa/test_cases/04_security.md), [06 compliance](qa/test_cases/06_compliance.md), [07 DQ severity](qa/test_cases/07_dq_severity.md) |

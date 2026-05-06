@@ -7,7 +7,15 @@ This directory holds a **runnable** proof-of-concept for the design described in
 ```
 poc/
 ├── databricks/
-│   ├── notebooks/              # 5 notebooks: B→S, SCD2, DLT, Streaming, DQ
+│   ├── pipelines/              # NEW · DLT (declarative, streaming+batch unified)
+│   │   ├── unified_medallion_dlt.py
+│   │   └── README.md           # when to use pipelines/ vs notebooks/
+│   ├── notebooks/              # imperative PySpark (PipelineRun audit chassis)
+│   │   ├── 01_bronze_to_silver_production_order.py
+│   │   ├── 02_scd2_dim_material.py
+│   │   ├── 03_dlt_silver_to_gold_supplier_otd.py
+│   │   ├── 04_streaming_cnc_telemetry.py
+│   │   └── 05_dq_runner.py
 │   └── lib/                    # PipelineRun, SCD helpers, reader factory, recon
 ├── adf/                        # ADF master orchestrator + child pipelines + LS/datasets/triggers
 ├── synapse/                    # DDL for fact/dim + 4 analytics queries + curated views
@@ -16,6 +24,19 @@ poc/
 ├── sample_data/                # synthetic SAP / supplier / CNC inputs
 └── config/                     # source_config, dq_rules, reconciliation tolerance
 ```
+
+### Folder-structure rationale (best-practice notes)
+
+- **Top-level grouping by concern**: `docs/`, `poc/`, `qa/`, `.github/` — design, prototype, quality, automation each get their own home so a reviewer can navigate to one without bleeding through the others.
+- **Within `poc/` grouped by Azure service / artefact family** because deployment paths are tech-specific (Terraform applies, ADF JSON push, Databricks Asset Bundle, Synapse SQL apply) and CD workflows are split the same way.
+- **Within `poc/databricks/` separated declarative from imperative**:
+  - `pipelines/` — Lakeflow Declarative Pipelines (DLT). Deployed as bundle resources of `kind: pipeline`. Use for streaming+batch unification, `apply_changes` SCD2, inline `expect_or_*` DQ.
+  - `notebooks/` — Imperative PySpark with the `PipelineRun` audit/lock/watermark chassis. Use when you need explicit AS9100 evidence, complex source-specific transformations, or Spark Structured Streaming features DLT doesn't yet expose.
+  - `lib/` — Reusable Python imported from both. Type-hinted (`mypy --strict` in CI).
+- **Sample data + config externalised** so the pipeline code is data-agnostic and DQ rules / reconciliation tolerance / source_config are the *only* knobs needed to onboard a new source.
+- **Tests at `poc/tests/`** alongside production code (not at repo root) so they ship with the bundle and run in dev workspace integration.
+
+The top-level **`Makefile`** is the one-command developer experience: `make test`, `make lint`, `make smoke`, `make ci-local` — the last of which mirrors what CI runs.
 
 ## How to run locally (Databricks Community Edition)
 

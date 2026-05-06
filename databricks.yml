@@ -15,6 +15,12 @@ variables:
   cluster_node_type:
     description: Node type for batch jobs.
     default: Standard_DS4_v2
+  eh_bootstrap:
+    description: Event Hubs Kafka bootstrap servers (env-specific).
+    default: chandan-eventhubs-dev.servicebus.windows.net:9093
+  lake_account:
+    description: ADLS Gen2 storage account name (env-specific).
+    default: chandanlakedev
 
 # -----------------------------------------------------------------------------
 # Resources
@@ -88,6 +94,30 @@ resources:
             spark_conf:
               spark.sql.streaming.stateStore.providerClass: com.databricks.sql.streaming.state.RocksDBStateStoreProvider
 
+  # ---------------------------------------------------------------------------
+  # DLT pipelines (Lakeflow Declarative)
+  # ---------------------------------------------------------------------------
+  pipelines:
+
+    # Unified medallion — streaming CNC telemetry + batch SAP files in ONE pipeline.
+    # The canonical Databricks pattern for "unify streaming and batch data".
+    unified_medallion:
+      name: "Unified Medallion (streaming + batch DLT) — ${bundle.target}"
+      catalog: ${var.catalog}
+      target: medallion
+      libraries:
+        - notebook:
+            path: ./poc/databricks/pipelines/unified_medallion_dlt.py
+      configuration:
+        pipelines.useDefaultPublishMode: "true"
+        eh_bootstrap:    "${var.eh_bootstrap}"
+        eh_topic:        "cnc-telemetry"
+        sap_bronze_path: "abfss://bronze@${var.lake_account}.dfs.core.windows.net/sap/production_order/"
+        schemas_path:    "abfss://checkpoints@${var.lake_account}.dfs.core.windows.net/dlt/schemas/"
+      development: true     # serverless / fast-iterate on dev; overridden per-target below
+      photon: true
+      channel: PREVIEW
+
 # -----------------------------------------------------------------------------
 # Targets
 # -----------------------------------------------------------------------------
@@ -107,7 +137,9 @@ targets:
       host: https://adb-test.azuredatabricks.net
       root_path: /Workspace/Shared/.bundle/${bundle.name}/test
     variables:
-      catalog: chandan_test
+      catalog:      chandan_test
+      eh_bootstrap: chandan-eventhubs-test.servicebus.windows.net:9093
+      lake_account: chandanlaketest
     run_as:
       user_name: svc-databricks-test@chandan.example.com
 
@@ -117,8 +149,10 @@ targets:
       host: https://adb-prod.azuredatabricks.net
       root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
     variables:
-      catalog: chandan_prod
+      catalog:           chandan_prod
       cluster_node_type: Standard_DS5_v2
+      eh_bootstrap:      chandan-eventhubs-prod.servicebus.windows.net:9093
+      lake_account:      chandanlakeprod
     run_as:
       user_name: svc-databricks-prod@chandan.example.com
     permissions:

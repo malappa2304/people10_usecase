@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Added — DLT unification of streaming and batch + folder-structure polish
+
+- **NEW `poc/databricks/pipelines/unified_medallion_dlt.py`** — single Lakeflow Declarative Pipeline that ingests **streaming** CNC telemetry (Event Hubs Kafka API) **and** **batch** SAP production orders (Auto Loader on JSON) into the *same* medallion. Bronze → Silver (with three DLT severity tiers + SCD2 via `apply_changes`) → Gold (a materialised view that joins streaming-derived telemetry rollups with batch-derived production orders). The canonical Databricks pattern for the brief's "unify streaming and batch data" requirement, made explicit in code.
+- **NEW `poc/databricks/pipelines/README.md`** — when to use `pipelines/` (declarative DLT) vs `notebooks/` (imperative PySpark with `PipelineRun` audit chassis) — one decision rule per row.
+- **`databricks.yml`** wires the DLT pipeline as a bundle resource (`resources.pipelines.unified_medallion`) with environment-scoped `eh_bootstrap` + `lake_account` variables for dev / test / prod.
+- **NEW `Makefile`** — one-command developer experience: `make test`, `make lint`, `make smoke`, `make tf-validate`, `make bundle-validate`, `make ci-local` (runs everything CI runs).
+- **Design doc §6.2** rewritten to make the *two-pattern* choice explicit — Pattern A (declarative DLT for streaming+batch unification, `apply_changes` SCD2, inline expectations); Pattern B (imperative PySpark for AS9100 audit chassis + complex source-specific transformations). Decision rule documented.
+- **`poc/README.md`** gains a *Folder-structure rationale* section explaining the grouping decisions to a reviewer.
+
 ### Note — PoC posture
 
 This repository is a **proof-of-concept**. Code lives on `dev` only. The
