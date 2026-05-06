@@ -1,0 +1,25 @@
+{
+  "name": "ls_sap_cdc",
+  "properties": {
+    "description": "SAP S/4HANA CDC connector via SHIR. SHIR runs on a 2-node cluster on-prem at the Hyderabad data centre.",
+    "type": "SapOdp",
+    "typeProperties": {
+      "server": "sap-prd.chandan.local",
+      "systemNumber": "00",
+      "clientId": "100",
+      "language": "EN",
+      "subscriberName": "ADF_CHANDAN",
+      "userName": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_keyvault", "type": "LinkedServiceReference" },
+        "secretName": "sap-cdc-user"
+      },
+      "password": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "ls_keyvault", "type": "LinkedServiceReference" },
+        "secretName": "sap-cdc-password"
+      }
+    },
+    "connectVia": { "referenceName": "ir_shir_onprem", "type": "IntegrationRuntimeReference" }
+  }
+}

@@ -1,0 +1,128 @@
+# =============================================================================
+# Databricks Asset Bundle — declarative deploy of notebooks + jobs across
+# dev / uat / prod targets. Driven by .github/workflows/cd-databricks.yml.
+# =============================================================================
+
+bundle:
+  name: chandan-aerospace
+
+include:
+  - poc/databricks/notebooks/*.py
+
+variables:
+  catalog:
+    description: Unity Catalog name; environment-specific.
+  cluster_node_type:
+    description: Node type for batch jobs.
+    default: Standard_DS4_v2
+
+# -----------------------------------------------------------------------------
+# Resources
+# -----------------------------------------------------------------------------
+resources:
+  jobs:
+
+    # Smoke job — re-runs SCD2 dim_material against a fixture dataset.
+    # Used by cd-databricks.yml as the post-deploy health check.
+    scd2_dim_material_smoke:
+      name: "[smoke] scd2_dim_material — ${bundle.target}"
+      tasks:
+        - task_key: scd2_smoke
+          notebook_task:
+            notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
+            base_parameters:
+              run_mode: smoke
+              fixture_path: /Volumes/${var.catalog}/qa/fixtures/dim_material_smoke
+          new_cluster:
+            spark_version: 14.3.x-photon-scala2.12
+            node_type_id: ${var.cluster_node_type}
+            num_workers: 1
+            spark_conf:
+              spark.databricks.delta.preview.enabled: "true"
+              spark.sql.adaptive.enabled: "true"
+      timeout_seconds: 1200
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure:
+          - data-oncall@chandan.example.com
+
+    # Daily orchestrator job — kicked off by ADF in production but defined
+    # here so the bundle can deploy/replay on demand.
+    daily_orchestrator:
+      name: "Daily orchestrator — ${bundle.target}"
+      tasks:
+        - task_key: bronze_to_silver_po
+          notebook_task:
+            notebook_path: ./poc/databricks/notebooks/01_bronze_to_silver_production_order.py
+        - task_key: scd2_dim_material
+          depends_on:
+            - task_key: bronze_to_silver_po
+          notebook_task:
+            notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
+        - task_key: dq_runner
+          depends_on:
+            - task_key: scd2_dim_material
+          notebook_task:
+            notebook_path: ./poc/databricks/notebooks/05_dq_runner.py
+      schedule:
+        quartz_cron_expression: "0 0 21 ? * MON-FRI"   # 02:00 IST = 21:30 UTC
+        timezone_id: UTC
+        pause_status: PAUSED                           # ADF triggers it in prod
+
+    # Continuous streaming job — CNC telemetry.
+    streaming_cnc_telemetry:
+      name: "Streaming · CNC telemetry — ${bundle.target}"
+      continuous:
+        pause_status: ${bundle.target == "dev" ? "PAUSED" : "UNPAUSED"}
+      tasks:
+        - task_key: cnc_stream
+          notebook_task:
+            notebook_path: ./poc/databricks/notebooks/04_streaming_cnc_telemetry.py
+          job_cluster_key: streaming_cluster
+      job_clusters:
+        - job_cluster_key: streaming_cluster
+          new_cluster:
+            spark_version: 14.3.x-photon-scala2.12
+            node_type_id: Standard_DS5_v2
+            num_workers: 4
+            spark_conf:
+              spark.sql.streaming.stateStore.providerClass: com.databricks.sql.streaming.state.RocksDBStateStoreProvider
+
+# -----------------------------------------------------------------------------
+# Targets
+# -----------------------------------------------------------------------------
+targets:
+
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-dev.azuredatabricks.net
+    variables:
+      catalog: chandan_dev
+
+  uat:
+    mode: production
+    workspace:
+      host: https://adb-uat.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/uat
+    variables:
+      catalog: chandan_uat
+    run_as:
+      user_name: svc-databricks-uat@chandan.example.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-prod.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
+    variables:
+      catalog: chandan_prod
+      cluster_node_type: Standard_DS5_v2
+    run_as:
+      user_name: svc-databricks-prod@chandan.example.com
+    permissions:
+      - level: CAN_VIEW
+        group_name: data-platform-readonly
+      - level: CAN_MANAGE_RUN
+        group_name: data-platform-oncall

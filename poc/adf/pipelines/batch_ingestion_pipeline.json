@@ -1,0 +1,62 @@
+{
+  "name": "pl_batch_ingestion",
+  "properties": {
+    "description": "Generic REST API → Bronze ingestion. Used for Teamcenter PLM and any other api_rest source.",
+    "parameters": {
+      "sourceId":          { "type": "Int" },
+      "entity":            { "type": "String" },
+      "targetBronzePath":  { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "Get_RestEndpointConfig",
+        "type": "Lookup",
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "SELECT base_url, page_size, auth_secret_name FROM dbo.source_rest_config WHERE source_id = @{pipeline().parameters.sourceId}",
+              "type": "Expression"
+            }
+          },
+          "dataset": { "referenceName": "ds_azuresql_source_config", "type": "DatasetReference" },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "Copy_Rest_To_Bronze",
+        "type": "Copy",
+        "dependsOn": [
+          { "activity": "Get_RestEndpointConfig", "dependencyConditions": ["Succeeded"] }
+        ],
+        "policy": { "timeout": "0.01:00:00", "retry": 3, "retryIntervalInSeconds": 60 },
+        "typeProperties": {
+          "source": {
+            "type": "RestSource",
+            "httpRequestTimeout": "00:01:40",
+            "requestInterval": "00.00:00:00.010",
+            "paginationRules": {
+              "AbsoluteUrl": "$.next"
+            }
+          },
+          "sink": {
+            "type": "JsonSink",
+            "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+            "formatSettings": { "type": "JsonWriteSettings" }
+          },
+          "enableStaging": false
+        },
+        "inputs": [{ "referenceName": "ds_rest_generic", "type": "DatasetReference",
+                     "parameters": {
+                       "baseUrl": "@activity('Get_RestEndpointConfig').output.firstRow.base_url"
+                     }}],
+        "outputs": [{ "referenceName": "ds_adls_bronze", "type": "DatasetReference",
+                      "parameters": {
+                        "path": "@pipeline().parameters.targetBronzePath",
+                        "fileName": "@concat(pipeline().parameters.entity, '_', utcnow('yyyyMMddHHmm'), '.json')"
+                      }}]
+      }
+    ],
+    "annotations": ["batch-ingestion"]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "trg_event_supplier_file",
+  "properties": {
+    "description": "Storage-event trigger — fires when a new supplier file lands in the SFTP→ADLS landing zone, so we don't wait for the daily cron to pick up urgent dispatches.",
+    "type": "BlobEventsTrigger",
+    "typeProperties": {
+      "blobPathBeginsWith": "/landing/blobs/supplier/",
+      "blobPathEndsWith": ".csv",
+      "ignoreEmptyBlobs": true,
+      "scope": "/subscriptions/<sub-id>/resourceGroups/rg-chandan-prod/providers/Microsoft.Storage/storageAccounts/chandanlanding",
+      "events": ["Microsoft.Storage.BlobCreated"]
+    },
+    "pipelines": [
+      {
+        "pipelineReference": { "referenceName": "pl_supplier_file", "type": "PipelineReference" },
+        "parameters": {
+          "sourceId": 7,
+          "entity": "supplier_dispatch",
+          "targetBronzePath": "supplier/dispatch",
+          "runDate": "@formatDateTime(trigger().startTime, 'yyyy-MM-dd')"
+        }
+      }
+    ]
+  }
+}
