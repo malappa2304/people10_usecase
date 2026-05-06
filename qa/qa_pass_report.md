@@ -5,7 +5,7 @@
 | Release candidate | `v1.0.0-rc1` |
 | Build SHA | `<populated by CI on cut>` |
 | Test cycle | RC1 — 2026-05-04 → 2026-05-06 |
-| Environment | UAT (`syn-chandan-uat`, `dbx-chandan-uat`, `chandanlake-uat`) |
+| Environment | TEST (`syn-chandan-test`, `dbx-chandan-test`, `chandanlake-test`) |
 | QA Lead | People10 Solutions Lab — QA |
 | Sign-off requested by | Data Platform Lead |
 
@@ -36,9 +36,9 @@ Coverage: every Critical case planned was executed; pass rate on Critical = **10
 
 | Test ID | Suite | Severity | Symptom | Root cause | Disposition | Tracking |
 | -- | -- | -- | -- | -- | -- | -- |
-| TC-IT-009 | Integration | Medium | Power BI dataset refresh occasionally took 13 min vs 10-min target | UAT capacity has shared Power BI workspace; throttling under load | **Accept for RC** — prod has dedicated capacity; will retest in prod smoke window | [#412](https://github.com/malappa2304/people10_usecase/issues/412) |
-| TC-PF-008 | Performance | Medium | Synapse workload group reroute stalled one query for 4 sec | UAT DWU is 200c, prod is 400c-1000c; expected behaviour at lower DWU | **Accept** — does not reproduce on prod-sized cluster | [#414](https://github.com/malappa2304/people10_usecase/issues/414) |
-| TC-DQ-009 | DQ | Medium | 3-sigma row-count anomaly detector raised on day-1 baseline | Detector uses 30-day rolling window; UAT only has 14 days of history | **Accept** — expected during bootstrap; converges by day 30 | [#418](https://github.com/malappa2304/people10_usecase/issues/418) |
+| TC-IT-009 | Integration | Medium | Power BI dataset refresh occasionally took 13 min vs 10-min target | TEST capacity has shared Power BI workspace; throttling under load | **Accept for RC** — prod has dedicated capacity; will retest in prod smoke window | [#412](https://github.com/malappa2304/people10_usecase/issues/412) |
+| TC-PF-008 | Performance | Medium | Synapse workload group reroute stalled one query for 4 sec | TEST DWU is 200c, prod is 400c-1000c; expected behaviour at lower DWU | **Accept** — does not reproduce on prod-sized cluster | [#414](https://github.com/malappa2304/people10_usecase/issues/414) |
+| TC-DQ-009 | DQ | Medium | 3-sigma row-count anomaly detector raised on day-1 baseline | Detector uses 30-day rolling window; TEST only has 14 days of history | **Accept** — expected during bootstrap; converges by day 30 | [#418](https://github.com/malappa2304/people10_usecase/issues/418) |
 
 No Critical or High failures.
 
@@ -69,7 +69,7 @@ The design defines five People10 requirements and a set of locked metrics. Trace
 | Metric | Target | Result | Evidence |
 | -- | -- | -- | -- |
 | Batch window                | ≤ 38 min        | **34 min** on representative load | TC-PF-004 |
-| Gold-layer freshness SLA    | 99.5%           | **99.7%** over 14-day UAT window  | Audit dashboard |
+| Gold-layer freshness SLA    | 99.5%           | **99.7%** over 14-day TEST window | Audit dashboard |
 | Streaming throughput        | 12 K events/sec | **12.6 K eps sustained, 4 h**     | TC-PF-001 |
 | End-to-end streaming latency | sub-minute      | **p95 = 47 sec**                   | TC-PF-002 |
 | Synapse concurrency         | 50 concurrent   | **50 users, p95 = 4.1 sec**        | TC-PF-007 |
@@ -101,7 +101,7 @@ Total wall time: 41 h 22 min over 3 calendar days
 
 | Status | Count | Notes |
 | -- | --: | -- |
-| Closed (fixed in `develop` and verified) | 8 | All Critical / High |
+| Closed (fixed on `dev` and verified)     | 8 | All Critical / High |
 | Accepted as known limitation             | 3 | The 3 failures listed in §2 |
 | Open                                     | 0 |
 
@@ -127,15 +127,15 @@ Approval requested:
 | Security Lead            | _Security Architect_    | _pending_   | _pending_  |
 | Migration PMO            | _Programme Manager_     | _pending_   | _pending_  |
 
-Once all four sign off, the release tag `v1.0.0` is cut on `main`; `release.yml` orchestrates prod deploy through the standard 2-reviewer environment gate.
+Once all four sign off, the `test → prod` MR is merged and the release tag `v1.0.0` is cut on `prod`; `release.yml` first verifies the tag is reachable from `prod`, then orchestrates the prod deploy through the standard 2-reviewer environment gate.
 
 ## 8. Smoke tests already executed in dev workspace
 
 The following confirm the package is *runnable* end-to-end on the deployed environment, beyond the unit suite:
 
 - `pytest poc/tests/ -v --cov=poc/databricks/lib --cov-fail-under=80` → all 9 unit tests pass; coverage **87%**.
-- `databricks bundle validate --target uat` → clean.
-- `databricks bundle deploy --target uat --auto-approve` → clean.
+- `databricks bundle validate --target test` → clean.
+- `databricks bundle deploy --target test --auto-approve` → clean.
 - Smoke job `scd2_dim_material_smoke` → SUCCESS (12 sec).
 - ADF `pl_master_orchestrator` triggered manually with `runDate=2026-05-06` → SUCCESS, all 11 child activities green.
 - Synapse smoke query `SELECT TOP 10 * FROM curated.v_supplier_otd_current` → 10 rows, 1.3 sec.
@@ -150,5 +150,5 @@ The following confirm the package is *runnable* end-to-end on the deployed envir
 ## 10. Lessons learned
 
 - **What worked well:** Hash-based SCD2 caught a backdated SAP correction we would have missed with source CDC. The 3-tier DQ severity (BLOCK / QUARANTINE / WARN) gave the data owners exactly the right level of authority over their own pipeline.
-- **What surprised us:** UAT's shared Power BI capacity is more constrained than expected — TC-IT-009 took us a half day to reproduce. We should request a dedicated UAT capacity for the next release.
+- **What surprised us:** TEST's shared Power BI capacity is more constrained than expected — TC-IT-009 took us a half day to reproduce. We should request a dedicated TEST capacity for the next release.
 - **What we'd do differently:** Move TC-PF-001 (4-h streaming load) earlier in the cycle so any cluster-sizing surprises don't compress the rest of the schedule.

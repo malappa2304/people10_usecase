@@ -74,7 +74,7 @@ This repo is set up to operate the way the production estate would, not as a one
 
 - **GitHub Actions** workflows under [`.github/workflows/`](.github/workflows/) cover CI (lint + tests + IaC scan + security scan), CD per artefact family (Terraform, ADF, Databricks via DAB, Synapse), drift detection, and tag-driven release.
 - **OIDC federation** to Azure — zero static secrets in the repo or org.
-- **Environment promotion** dev → uat → prod with reviewer protection and migration-wave reconciliation gate.
+- **Environment promotion** `feature/* → dev → test → prod` via merge requests, with reviewer protection and migration-wave reconciliation gate. See [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md) for the day-to-day flow.
 - **IaC scanners** (`terraform validate`, `tflint`, `checkov`, `tfsec`, `bicep lint` + what-if) wired as required PR checks.
 - **Coverage gate** ≥ 80% on the production library (`poc/databricks/lib/`).
 - **CODEOWNERS** — security review on infra/networking; quality engineering on DQ rules; migration PMO on reconciliation tolerance.

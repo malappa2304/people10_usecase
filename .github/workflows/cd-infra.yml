@@ -2,9 +2,9 @@
 # CD · Terraform infra deploy
 #
 # Promotion model:
-#   develop  → environment: dev   (auto-deploy after CI green)
-#   uat      → environment: uat   (1 reviewer)
-#   main+tag → environment: prod  (2 reviewers, plus tag-on-main gate)
+#   dev   → environment: dev   (auto-deploy after MR merge into `dev`)
+#   test  → environment: test  (auto-deploy after MR merge into `test`, 1 reviewer on the MR)
+#   prod  → environment: prod  (tag-driven via release.yml, 2 reviewers + tag-on-prod guard)
 #
 # Plan is always posted to the PR / Step Summary; apply is gated by GitHub
 # Environment protection (reviewers configured per env in repo settings).
@@ -14,7 +14,7 @@ name: CD · Infra (Terraform)
 
 on:
   push:
-    branches: [develop, uat]
+    branches: [dev, test]
     paths:
       - 'poc/infrastructure/terraform/**'
       - '.github/workflows/cd-infra.yml'
@@ -22,7 +22,7 @@ on:
     inputs:
       environment:
         type: choice
-        options: [dev, uat, prod]
+        options: [dev, test, prod]
         default: dev
 
 # Once apply starts, do NOT cancel — half-applied infra is worse than queued.
@@ -47,8 +47,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "env=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
-            echo "env=uat" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/test" ]; then
+            echo "env=test" >> "$GITHUB_OUTPUT"
           else
             echo "env=dev" >> "$GITHUB_OUTPUT"
           fi

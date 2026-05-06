@@ -118,7 +118,7 @@ Unity Catalog for ACLs at `catalog.schema.table` granularity (and column-level m
 
 ### 6.7 CI/CD & DevOps
 
-Terraform for ADLS, Databricks workspace, Synapse pools, networking (because state-managed IaC scales better than Bicep for foundation). Bicep for ADF pipelines (it's the native deployment format and round-trips cleanly with the ADF authoring UI). Databricks Asset Bundles for notebook + job promotion. Azure DevOps with feature → develop → uat → prod, YAML pipelines, pytest + chispa for unit tests, integration tests in dev workspace before UAT. Branch protection on `main`; UAT promotion requires reconciliation green.
+Terraform for ADLS, Databricks workspace, Synapse pools, networking (because state-managed IaC scales better than Bicep for foundation). Bicep for ADF pipelines (it's the native deployment format and round-trips cleanly with the ADF authoring UI). Databricks Asset Bundles for notebook + job promotion. GitHub Actions with `feature/* → dev → test → prod` and merge-request promotion at every transition (see [`04_cicd_strategy.md`](04_cicd_strategy.md) and the runbook in [`05_promotion_runbook.md`](05_promotion_runbook.md)), pytest + chispa for unit tests, integration tests on the DEV environment before promotion. Branch protection on `prod`; the `test → prod` MR requires reconciliation green during migration waves.
 
 ## 7. Key Design Decisions & Trade-offs
 

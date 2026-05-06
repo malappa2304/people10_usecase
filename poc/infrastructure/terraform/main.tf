@@ -30,7 +30,7 @@ provider "azurerm" {
 }
 
 locals {
-  env  = var.environment           # dev | uat | prod
+  env  = var.environment           # dev | test | prod
   loc  = "centralindia"            # ITAR-adjacent residency requirement
   base = "chandan-${local.env}"
 
@@ -46,7 +46,7 @@ locals {
 }
 
 variable "environment" {
-  description = "dev | uat | prod"
+  description = "dev | test | prod"
   type        = string
 }
 

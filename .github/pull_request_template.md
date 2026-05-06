@@ -1,7 +1,13 @@
 <!--
+This is a merge request. Code only moves forward — feature/* → dev → test → prod.
+Each transition is its own MR. See docs/05_promotion_runbook.md.
+
 Conventional commits enforced — PR title MUST start with one of:
   feat: | fix: | docs: | refactor: | test: | chore: | ci: | infra: | deps:
 followed by an optional scope.   e.g.   feat(adf): add supplier_file event trigger
+
+For promotion MRs (dev → test, test → prod), title format:
+  promote: dev → test (2026-05-08, wave 3 batch)
 -->
 
 ## Summary

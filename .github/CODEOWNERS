@@ -2,7 +2,7 @@
 # CODEOWNERS — required reviewers per area.
 #
 # Order matters; the LAST matching pattern wins.
-# Branch protection on develop/uat/main enforces these as required reviewers.
+# Branch protection on dev/test/prod enforces these as required reviewers.
 # =============================================================================
 
 # Default — data-platform-team owns everything not covered below.

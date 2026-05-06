@@ -21,9 +21,9 @@ the customer security team within 48 hours of confirmation.
 
 | Branch | Status     | Security fixes |
 | ------ | ---------- | -------------- |
-| `main` | Production | Yes            |
-| `uat`  | Pre-prod   | Yes            |
-| `develop` | Active dev | Yes         |
+| `prod` | Production | Yes            |
+| `test` | Pre-prod   | Yes            |
+| `dev`  | Active dev | Yes            |
 | `release/v1.x` (last 2 minor) | Maintenance | Critical only |
 | Older release branches | EOL    | None           |
 

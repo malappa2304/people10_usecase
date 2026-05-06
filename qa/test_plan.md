@@ -40,7 +40,7 @@ This plan defines the testing strategy for the Cloud-Native Enterprise Data Plat
 | -- | -- | -- | -- | -- |
 | 1 | **Unit** | Logic correctness in isolation | pytest + chispa | Every PR |
 | 2 | **Functional / system** | End-to-end behaviour against synthetic data | Notebook runs in dev workspace | Every PR + nightly |
-| 3 | **Integration** | ADF → DBX → Synapse handoffs | Databricks Workflows fixture + smoke ADF run | On `develop` push |
+| 3 | **Integration** | ADF → DBX → Synapse handoffs | Databricks Workflows fixture + smoke ADF run | On `dev` push (every MR merge into `dev`) |
 | 4 | **Performance** | Throughput / latency / concurrency targets | Synthetic 12K eps load generator + JMeter for Synapse | Pre-cutover and weekly on prod |
 | 5 | **Security** | Posture controls behave as designed | Defender for Cloud + manual verification | Every release + quarterly review |
 | 6 | **Migration / reconciliation** | Parity between legacy DW and new Gold | `reconciliation.py` + dashboard | Daily during migration waves |
@@ -53,11 +53,13 @@ This plan defines the testing strategy for the Cloud-Native Enterprise Data Plat
 | Env | Purpose | Source data | Differences from prod |
 | -- | -- | -- | -- |
 | **local (CE)** | Developer self-test | Sample fixtures in `poc/sample_data/` | No Unity Catalog; no PEs |
-| **dev** | Auto-deploy from `develop` | Synthetic + obfuscated 1-day prod slice | Smaller cluster sizes; spot workers |
-| **uat** | Pre-prod parity | Production-shape data, masked | Same shape as prod; lower DWU |
-| **prod** | Production | Real data | Full sizing |
+| **dev**  | Auto-deploys on every MR merge into `dev` branch  | Synthetic + obfuscated 1-day prod slice | Smaller cluster sizes; spot workers |
+| **test** | Auto-deploys on every MR merge into `test` branch | Production-shape data, masked          | Same shape as prod; lower DWU |
+| **prod** | Tag-driven; only after `test → prod` MR merges    | Real data                              | Full sizing |
 
-Production-shape data in UAT is masked per the data-classification matrix: customer names hashed, supplier banking details redacted, employee names tokenised.
+Promotion path: `feature/* → dev → test → prod`. Every transition is a merge request. Promotion runbook in [`../docs/05_promotion_runbook.md`](../docs/05_promotion_runbook.md).
+
+Production-shape data on TEST is masked per the data-classification matrix: customer names hashed, supplier banking details redacted, employee names tokenised.
 
 ## 4. Roles and responsibilities (RACI)
 
@@ -72,13 +74,13 @@ Production-shape data in UAT is masked per the data-classification matrix: custo
 
 ## 5. Entry and exit criteria
 
-### 5.1 Entry to UAT
-- All P1/P2 dev defects closed
+### 5.1 Entry to TEST (the `dev → test` MR)
+- All P1/P2 DEV defects closed
 - Coverage ≥ 80% on `poc/databricks/lib/`
-- Terraform plan against UAT empty after deploy
-- All CI checks green for ≥ 24 h on `develop`
+- Terraform plan against TEST empty after deploy
+- All CI checks green for ≥ 24 h on `dev`
 
-### 5.2 Exit from UAT (entry to prod)
+### 5.2 Exit from TEST (the `test → prod` MR)
 - 100% pass on Critical and High functional cases
 - ≥ 95% pass on Medium; documented workaround for any failures
 - Performance: 12K eps streaming sustained for ≥ 4 h with no driver restarts; 38-min batch achieved
@@ -99,11 +101,11 @@ Resume only when the trigger condition is documented as resolved.
 
 - **Synthetic data** in `poc/sample_data/` covers happy-path schema. Each case lists the fixture(s) it uses.
 - **Boundary fixtures** under `qa/fixtures/` (created during execution): null-only rows, max-length strings, boundary timestamps (DST transitions, leap-second), unicode names.
-- **Masked production slice** in UAT — `dbx_uat.qa_fixtures.*` schema. Refreshed weekly from a 1-day prod export with reversible tokenisation.
+- **Masked production slice** in TEST — `dbx_test.qa_fixtures.*` schema. Refreshed weekly from a 1-day prod export with reversible tokenisation.
 
 ## 7. Defect lifecycle
 
-`Open` → `Triaged` (severity + owner) → `In progress` → `Fixed in develop` → `Verified in dev` → `Closed`. Critical defects re-open the relevant test case in the regression set automatically.
+`Open` → `Triaged` (severity + owner) → `In progress` → `Fixed in dev branch` → `Verified on DEV env` → `Closed`. Critical defects re-open the relevant test case in the regression set automatically.
 
 Severity vs priority:
 - **Critical** — production halted, data loss, audit failure.
@@ -115,7 +117,7 @@ Severity vs priority:
 
 | # | Risk | Mitigation |
 | -- | -- | -- |
-| TR-1 | UAT data divergence from prod masks real bugs | Weekly refresh; statistical drift check before each test cycle |
+| TR-1 | TEST data divergence from prod masks real bugs | Weekly refresh; statistical drift check before each test cycle |
 | TR-2 | OPC-UA emulator under-counts vs real CNC | Cross-check against 10-min capture from one real machine per quarter |
 | TR-3 | Reconciliation false-positives on legacy timezone bug | Variance tolerance per pipeline; data-owner sign-off |
 | TR-4 | Test cluster cost spike during perf runs | Scheduled tear-down + spot workers; budget alert at 70% of monthly cap |

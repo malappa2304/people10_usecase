@@ -10,7 +10,7 @@ name: CD · Synapse
 
 on:
   push:
-    branches: [develop, uat]
+    branches: [dev, test]
     paths:
       - 'poc/synapse/**'
       - '.github/workflows/cd-synapse.yml'
@@ -18,7 +18,7 @@ on:
     inputs:
       environment:
         type: choice
-        options: [dev, uat, prod]
+        options: [dev, test, prod]
         default: dev
 
 concurrency:
@@ -39,8 +39,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "env=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
-            echo "env=uat" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/test" ]; then
+            echo "env=test" >> "$GITHUB_OUTPUT"
           else
             echo "env=dev" >> "$GITHUB_OUTPUT"
           fi

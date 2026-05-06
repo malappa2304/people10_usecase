@@ -1,5 +1,5 @@
 ###############################################################################
-# CI — runs on every PR and on push to develop/uat/main.
+# CI — runs on every MR and on push to dev/test/prod.
 #
 # Required checks (configured in branch protection):
 #   - lint-python, lint-yaml, lint-sql
@@ -16,9 +16,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, uat, main]
+    branches: [dev, test, prod]
   push:
-    branches: [develop, uat, main]
+    branches: [dev, test, prod]
 
 # PR cancels in-progress CI on the same ref; main-branch CI does not cancel.
 concurrency:

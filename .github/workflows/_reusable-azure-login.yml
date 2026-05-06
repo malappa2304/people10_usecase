@@ -21,7 +21,7 @@ on:
       environment:
         required: true
         type: string
-        description: GitHub Environment name (dev | uat | prod)
+        description: GitHub Environment name (dev | test | prod)
       subscription-id:
         required: true
         type: string

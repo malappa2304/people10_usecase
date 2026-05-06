@@ -1,6 +1,6 @@
 # =============================================================================
 # Databricks Asset Bundle — declarative deploy of notebooks + jobs across
-# dev / uat / prod targets. Driven by .github/workflows/cd-databricks.yml.
+# dev / test / prod targets. Driven by .github/workflows/cd-databricks.yml.
 # =============================================================================
 
 bundle:
@@ -101,15 +101,15 @@ targets:
     variables:
       catalog: chandan_dev
 
-  uat:
+  test:
     mode: production
     workspace:
-      host: https://adb-uat.azuredatabricks.net
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/uat
+      host: https://adb-test.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/test
     variables:
-      catalog: chandan_uat
+      catalog: chandan_test
     run_as:
-      user_name: svc-databricks-uat@chandan.example.com
+      user_name: svc-databricks-test@chandan.example.com
 
   prod:
     mode: production

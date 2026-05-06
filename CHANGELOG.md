@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed — branching model refactor
+
+- Branching model renamed from `develop / uat / main` to **`dev / test / prod`** with **merge-request promotion** at every transition (`feature/* → dev → test → prod`). Source of truth for the model: [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md). Day-to-day mechanics: new [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md).
+- Workflows refactored to trigger on `[dev, test, prod]` and resolve the GitHub Environment from branch ref. `cd-infra.yml`, `cd-databricks.yml`, `cd-adf.yml`, `cd-synapse.yml` all updated.
+- `release.yml` adds a `guard-tag-on-prod` job — tags must be reachable from the `prod` branch or the workflow fails before any deploy.
+- Databricks Asset Bundle targets renamed `dev / uat / prod` → `dev / test / prod`.
+- CODEOWNERS, PR template, SECURITY.md, CONTRIBUTING.md, QA test plan + report + cases all updated for the new env names.
+- Migration backlog: rename the legacy default branch `main` to `prod` once external links + in-flight branches are migrated.
+
 ## [1.0.0-rc1] — 2026-05-06
 
 ### Added — Foundation cut
@@ -25,7 +34,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - **CI/CD**
   - GitHub Actions workflows: `ci.yml`, `cd-infra.yml`, `cd-databricks.yml`, `cd-adf.yml`, `cd-synapse.yml`, `drift-detection.yml`, `release.yml`, plus reusable Azure-login workflow
-  - Databricks Asset Bundle config (`databricks.yml`) with dev / uat / prod targets
+  - Databricks Asset Bundle config (`databricks.yml`) with dev / test / prod targets
   - OIDC federation to Azure (zero static secrets); environment-scoped credentials
   - Required PR checks: ruff, mypy --strict, yamllint, sqlfluff, pytest with 80% coverage gate, terraform validate + tflint + checkov + tfsec, bicep lint + what-if, ADF JSON schema, gitleaks, dependency-review
   - Repo hygiene: CODEOWNERS, Dependabot, PR template, SECURITY.md, issue templates
@@ -39,7 +48,7 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - 12.6 K events/sec sustained for 4 h (target: 12 K eps)
 - 34-min batch on representative load (target: ≤ 38 min)
-- 99.7% Gold-layer freshness over 14-day UAT window (target: 99.5%)
+- 99.7% Gold-layer freshness over 14-day TEST window (target: 99.5%)
 - 50 concurrent BI users with p95 = 4.1 sec (target: ≤ 5 sec)
 - AS9100 audit prep dry-run 3.5 days (target: ≤ 4 days)
 - Synapse cost projection -42% (target: -41%)

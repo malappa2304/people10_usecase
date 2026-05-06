@@ -1,6 +1,6 @@
 # Functional Test Cases
 
-Source code path is shown for each case. Severity drives regression frequency: **Critical** runs every PR, **High** runs nightly, **Medium** runs on `develop` push, **Low** runs weekly.
+Source code path is shown for each case. Severity drives regression frequency: **Critical** runs every MR, **High** runs nightly, **Medium** runs on `dev` push (every MR merge into `dev`), **Low** runs weekly.
 
 ---
 

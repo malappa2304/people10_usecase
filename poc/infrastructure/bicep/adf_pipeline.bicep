@@ -11,7 +11,7 @@
 // our experience, which is annoying for a 50-pipeline factory.)
 // =============================================================================
 
-@description('Environment name: dev | uat | prod')
+@description('Environment name: dev | test | prod')
 param environment string
 
 @description('Location — must be Central India for ITAR-adjacent residency')

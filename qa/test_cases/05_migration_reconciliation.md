@@ -98,7 +98,7 @@ Verifies the Strangler Fig parallel-run reconciliation framework — the cutover
 ## TC-MG-014 · Cutover dry-run — endpoints flip without breaking
 **Severity:** High · **Covers:** wave cutover playbook
 
-- **Given** UAT environment with both legacy and new running
+- **Given** TEST environment with both legacy and new running
 - **When** the cutover script flips Power BI dataset connection from legacy to new
 - **Then** Power BI tiles continue to render; numbers match (within tolerance) the prior day's view; rollback flips the connection back in < 5 min.
 

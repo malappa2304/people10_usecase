@@ -1,11 +1,14 @@
 ###############################################################################
 # Release — tag-driven prod deploy.
 #
+# Tags MUST be cut on the `prod` branch only (after the test → prod MR has merged).
+#
+#   git checkout prod && git pull --ff-only
 #   git tag -s v1.4.0 -m 'Wave 3 supply chain'
 #   git push origin v1.4.0
 #
-# This workflow generates the GitHub Release with auto-changelog + SBOM, then
-# orchestrates the prod CD workflows.
+# A guard step below verifies the tag is reachable from `prod`; tagging from any
+# other branch fails the workflow.
 ###############################################################################
 
 name: Release
@@ -21,7 +24,26 @@ permissions:
   packages: write
 
 jobs:
+  guard-tag-on-prod:
+    name: Verify tag is reachable from prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fail if tag not on prod
+        run: |
+          set -euo pipefail
+          git fetch origin prod --quiet
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/prod; then
+            echo "::error::Tag ${GITHUB_REF_NAME} is not reachable from origin/prod."
+            echo "Tags must be cut on prod only — see docs/05_promotion_runbook.md §3."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} confirmed on prod (sha=${GITHUB_SHA})"
+
   release:
+    needs: guard-tag-on-prod
     runs-on: ubuntu-latest
     environment: prod    # 2 reviewers per env protection
     steps:

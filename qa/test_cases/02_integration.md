@@ -1,6 +1,6 @@
 # Integration Test Cases
 
-End-to-end behaviour across ADF → Databricks → Synapse → Power BI. Run nightly on `develop` and on every UAT promotion.
+End-to-end behaviour across ADF → Databricks → Synapse → Power BI. Run nightly on `dev` and on every `dev → test` promotion MR.
 
 ---
 

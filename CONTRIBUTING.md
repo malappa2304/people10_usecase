@@ -2,15 +2,17 @@
 
 Thanks for working on the Chandan Aerospace lakehouse. This page is the short form; longer detail lives in [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md).
 
-## Branching
+## Branching — `dev → test → prod` via merge requests
 
 ```
-feature/* ──▶ develop ──▶ uat ──▶ main
+feature/* ──MR──▶ dev ──MR──▶ test ──MR──▶ prod
 ```
 
-- Branch off `develop` for features and fixes.
-- One PR per concern — don't bundle unrelated changes.
+- Branch off `dev` for features and fixes (`git checkout -b feature/<topic> dev`).
+- Promotion is always via a merge request (GitHub PR). No direct pushes to `dev`/`test`/`prod`.
+- One MR per concern — don't bundle unrelated changes.
 - Conventional Commits enforced via PR title check: `feat(adf): add supplier file event trigger`.
+- Step-by-step promotion runbook: [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md).
 
 ## Before you open a PR
 
@@ -53,11 +55,12 @@ Breaking changes to Silver / Gold tables require a paired up + down migration sc
 
 ## Releases
 
-Tagged on `main` only:
+Tagged on `prod` only (after the `test → prod` MR has merged):
 
 ```
+git checkout prod && git pull --ff-only
 git tag -s v1.4.0 -m 'Wave 3 — Manufacturing'
 git push origin v1.4.0
 ```
 
-`release.yml` cuts a GitHub Release with auto-changelog + SBOM, then dispatches the prod CD workflows.
+`release.yml` first verifies the tag is reachable from `prod` (fails otherwise), then cuts a GitHub Release with auto-changelog + SBOM and dispatches the prod CD workflows. Each prod workflow gates on the `prod` GitHub Environment (2 reviewers + 10-min wait timer).
