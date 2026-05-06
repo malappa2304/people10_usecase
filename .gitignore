@@ -27,11 +27,6 @@ crash.*.log
 .databricks/
 *.bundle.lock
 
-# --- Bicep ARM build output -----------------------------------------------
-*.json.bak
-infrastructure/bicep/*.json    # compiled ARM (committed via release artefact instead)
-!infrastructure/bicep/*.bicep  # source of truth
-
 # --- IDE / editor ----------------------------------------------------------
 .vscode/
 .idea/

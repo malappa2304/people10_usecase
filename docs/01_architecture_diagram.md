@@ -79,6 +79,6 @@ A more detailed view that shows these layers, the SHIR for on-prem connectivity,
 The Bronze→Silver→Gold flow runs on **two complementary patterns** inside Databricks. Both produce Delta tables — same medallion, different code styles:
 
 1. **Declarative — Lakeflow Declarative Pipelines (DLT)** — `poc/databricks/pipelines/unified_medallion_dlt.py`. One pipeline ingests *both* streaming (Event Hubs) and batch (Auto Loader on SAP files), applies the three DLT severity tiers (`expect_or_fail` / `expect_or_drop` / `expect`), runs SCD2 via `apply_changes`. Best for fresh, end-to-end unified flows.
-2. **Imperative — PySpark notebooks** — `poc/databricks/notebooks/01_*` … `05_*`. Wrapped in a `PipelineRun` audit chassis (lock + watermark + structured audit row) for AS9100 evidence. Best for SAP-specific transformations and complex Structured Streaming features DLT doesn't yet expose.
+2. **Imperative — PySpark notebooks** — `poc/databricks/notebooks/01_*`, `02_*`, `04_*`. Wrapped in a `PipelineRun` audit chassis (lock + watermark + structured audit row) for explicit run-metadata audit trails. Best for source-specific transformations (e.g. SAP timezone normalisation) and complex Structured Streaming features DLT doesn't yet expose.
 
-The decision rule and rationale are in design-doc §6.2.
+The decision rule and rationale are in design-doc §4.3.

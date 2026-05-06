@@ -14,9 +14,10 @@ variance types:
     VALUE_MISMATCH     — same key, different hash
 
 Output is one Delta table (`audit.reconciliation_results`) that the cutover
-dashboard reads. Per-pipeline tolerance comes from
-`config/reconciliation_tolerance.yaml`. A pipeline is **cutover-ready** when
-variance % is below tolerance for ≥ 7 consecutive days.
+dashboard reads. Per-pipeline tolerance is passed in via `ReconConfig`
+(in production, that config would be loaded from a YAML file or table — for
+this PoC the config is constructed directly in code). A pipeline is
+**cutover-ready** when variance % is below tolerance for ≥ 7 consecutive days.
 
 Why three variance types and not just "mismatch"
 ------------------------------------------------

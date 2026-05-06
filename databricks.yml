@@ -28,8 +28,8 @@ variables:
 resources:
   jobs:
 
-    # Smoke job — re-runs SCD2 dim_material against a fixture dataset.
-    # Used by cd-databricks.yml as the post-deploy health check.
+    # Smoke job — re-runs SCD2 dim_material against a fixture dataset
+    # as a post-deploy health check.
     scd2_dim_material_smoke:
       name: "[smoke] scd2_dim_material — ${bundle.target}"
       tasks:
@@ -38,7 +38,7 @@ resources:
             notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
             base_parameters:
               run_mode: smoke
-              fixture_path: /Volumes/${var.catalog}/qa/fixtures/dim_material_smoke
+              fixture_path: /Volumes/${var.catalog}/fixtures/dim_material_smoke
           new_cluster:
             spark_version: 14.3.x-photon-scala2.12
             node_type_id: ${var.cluster_node_type}
@@ -73,7 +73,9 @@ resources:
     streaming_cnc_telemetry:
       name: "Streaming · CNC telemetry — ${bundle.target}"
       continuous:
-        pause_status: ${bundle.target == "dev" ? "PAUSED" : "UNPAUSED"}
+        # Paused on dev so the cluster doesn't burn budget during local dev;
+        # unpaused on test/prod via the per-target overrides at the bottom.
+        pause_status: PAUSED
       tasks:
         - task_key: cnc_stream
           notebook_task:

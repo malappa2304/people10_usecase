@@ -18,7 +18,7 @@ I picked manufacturing as the use case (ERP + supplier files for batch, machine 
 The diagram is in [`01_architecture_diagram.md`](01_architecture_diagram.md). In words:
 
 - Streaming sources land via **Azure Event Hubs (Kafka API)**.
-- Batch sources land via **Azure Data Factory (ADF)** orchestrating Auto Loader on file drops + JDBC pulls for on-prem systems.
+- Batch sources land via **Auto Loader** on file drops in ADLS Bronze. In production an orchestrator (Azure Data Factory, with SHIR for on-prem connectivity, or a Databricks Workflow) would copy upstream files into Bronze; in this PoC the DLT pipeline reads directly from ADLS so the unification claim is in one place.
 - All sources write into ADLS Gen2 **Bronze** containers.
 - **Databricks** (PySpark + Lakeflow Declarative Pipelines / DLT) curates Bronze → Silver → Gold.
 - **Silver and Gold are Delta Lake** under Unity Catalog.
@@ -122,7 +122,7 @@ Every component on the data plane is a *managed* service. No self-hosted Kafka, 
 | Layer | Service | Scale handle | Reason |
 | -- | -- | -- | -- |
 | Streaming ingest | Event Hubs (Kafka API) | Partition count + Throughput Units | Managed, auto-inflate available |
-| Batch ingest | ADF | `ForEach` parallelism + Copy `parallelCopies` | Plus SHIR for on-prem connectivity |
+| Batch ingest | Auto Loader (ADF or Databricks Workflows for orchestration) | `ForEach` parallelism + per-file streaming | SHIR available for on-prem connectivity |
 | Compute | Databricks (Photon + AQE) | Autoscaling pools, spot workers for non-critical | Photon ≈ 2-3× efficiency; spot saves ~50% on batch |
 | Storage | ADLS Gen2 + Delta | Linear; lifecycle for cost | Hierarchical NS gives directory-level ACLs |
 | Serving (warehouse) | Synapse Dedicated | DWU scale-up; pause schedule | Workload management groups for concurrency |
@@ -158,14 +158,22 @@ The DLT pipeline shows all three in action.
 
 ### 8.1 CI/CD
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on PR and push:
+GitHub Actions workflow at `.github/workflows/ci.yml` runs on PR and push to `dev`. What it does today (matches the file):
 
-- Lint (`ruff`, `yamllint`, `sqlfluff`)
-- Unit tests (`pytest` + `chispa`, coverage gate ≥80% on the production library)
-- IaC validation (`terraform fmt` + `validate` + `tflint` + `checkov`)
-- Security scan (`gitleaks` for secrets, `actions/dependency-review` for CVEs)
+- Lint Python — `ruff check`, `ruff format --check`, `mypy --strict` on the production library.
+- Unit tests — `pytest` + `chispa`, coverage gate ≥ 80% on `poc/databricks/lib/`.
+- IaC validation — `terraform fmt` + `terraform validate`.
+- Security scan — `gitleaks` on the full diff.
 
-Production CI/CD would also include CD workflows per environment, OIDC federation to Azure (no static client secrets), and reviewer-protected GitHub Environments for `dev` / `test` / `prod`. For a take-home the CI workflow is the meaningful artefact; the CD shape is described in this section instead of all written.
+What I'd add for production but didn't build for this take-home:
+
+- CD workflows per environment (Databricks bundle deploy, Synapse DDL apply, Terraform apply).
+- OIDC federation to Azure — no static client secrets in repo or org settings.
+- Reviewer-protected GitHub Environments for `dev` / `test` / `prod` with branch-protection rules.
+- Heavier IaC scanning (`tflint`, `checkov`, `tfsec`) and `actions/dependency-review` on PRs.
+- `yamllint` and `sqlfluff` on the YAML and SQL.
+
+The CI workflow is the meaningful artefact for a 3-day PoC; the CD shape is described above instead of all written.
 
 ### 8.2 Monitoring
 

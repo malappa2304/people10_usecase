@@ -3,14 +3,14 @@
 # Usage:
 #   make help        # see everything
 #   make test        # run unit tests with coverage gate
-#   make lint        # ruff + yamllint + sqlfluff
-#   make smoke       # validate + smoke-deploy DLT pipeline to dev
+#   make lint        # ruff + sqlfluff
+#   make smoke       # validate + smoke run on dev (needs Databricks CLI auth)
 #   make tf-fmt      # terraform fmt -recursive
-#   make tf-plan     # terraform plan against dev
+#   make tf-plan     # terraform plan against dev (needs az login)
 #   make ci-local    # run the same checks CI runs, locally
 # =============================================================================
 
-.PHONY: help test lint lint-py lint-yaml lint-sql tf-fmt tf-validate tf-plan \
+.PHONY: help test lint lint-py lint-sql tf-fmt tf-validate tf-plan \
         bundle-validate bundle-deploy-dev smoke ci-local clean
 
 PY        ?= python3
