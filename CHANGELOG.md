@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Note — PoC posture
+
+This repository is a **proof-of-concept**. Code lives on `dev` only. The
+`test` and `prod` branches are intentionally **not** created in the remote
+yet — they will be branched from `dev` via promotion MRs (per the runbook
+in [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md)) when
+the engagement graduates from PoC to delivery. The CI/CD framework,
+environments, and quality gates are production-grade and ready for that
+moment; only the *use* of the test/prod paths is deferred.
+
 ### Changed — branching model refactor
 
 - Branching model renamed from `develop / uat / main` to **`dev / test / prod`** with **merge-request promotion** at every transition (`feature/* → dev → test → prod`). Source of truth for the model: [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md). Day-to-day mechanics: new [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md).
