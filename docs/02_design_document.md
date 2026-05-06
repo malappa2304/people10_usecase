@@ -214,4 +214,17 @@ The PoC runs on Databricks Community Edition with the sample data; instructions 
 
 ## 12. Conclusion
 
-The Chandan platform is not a greenfield architecture — it is a *legacy modernisation* that has to keep an aerospace supply chain running while the spine is replaced. The choices in this document are the ones I would defend in an AS9100 audit and in a Boeing supplier review. They prioritise **proven parity** (Strangler Fig with reconciliation), **business continuity** (sub-4-hour cumulative downtime over 18 months), and **measurable outcome** (6 hr → 38 min batch, 6 weeks → 4 days audit, 41% Synapse savings, ₹40 L/year of Informatica gone). The platform is set up so that the next problem the business asks us to solve — predictive maintenance, GenAI on contracts, US/EU expansion — does not require another rebuild.
+The Chandan platform is not a greenfield architecture — it's a *legacy modernisation* that has to keep an aerospace supply chain running while the spine is replaced. The choices in this document are the ones I'd defend in an AS9100 audit and in a Boeing supplier review. They prioritise **proven parity** (Strangler Fig with reconciliation), **business continuity** (sub-4-hour cumulative downtime over 18 months), and **measurable outcome** (6 hr → 38 min batch, 6 weeks → 4 days audit, 41% Synapse savings, ₹40 L/year of Informatica gone). The platform is set up so that the next problem the business asks us to solve — predictive maintenance, GenAI on contracts, US/EU expansion — doesn't require another rebuild.
+
+### 12.1 What I'd reconsider with more time
+
+A take-home is a snapshot. A few things I'd push on if this were a real engagement:
+
+- **Pilot-domain choice.** I picked Quality Inspection because it has the lowest cross-domain coupling and the lowest political stakes. Honest reflection: the team would have learned more about migration risk by piloting on Supply Chain instead. Quality is the *safe* choice; supply chain is the *useful* one. With more political capital I'd push the latter.
+- **Reconciliation tolerance defaults.** The 0.5% tolerance on production-order pipelines came from a gut call, not from a measured baseline of legacy variance. In production I'd run the recon framework against legacy *only* for two weeks first to set per-pipeline tolerances empirically, then start the parallel-run.
+- **Online feature store.** Cosmos DB is the right answer for sub-100 ms inference at this scale, but I'd revisit Azure ML's managed feature store if it has matured to the point where the operational overhead is gone. The pattern is right; the implementation is the kind of thing that benefits from being deferred a quarter.
+- **Multi-cloud posture.** I locked onto Azure because the brief asked for one cloud and Chandan's existing footprint is there. If the business asks "what about AWS for the US plants?", the lakehouse pattern (Delta, open Parquet, Unity Catalog with federated metastores) translates more cleanly than the surrounding orchestration would. That's a design decision I'd flag, not a regret.
+
+### 12.2 What I'm genuinely proud of
+
+The reconciliation framework. It's the smallest piece of code in the PoC and the one I think will most outlive the rest. Three variance types, hash-based comparison, per-pipeline tolerance from the data owner not engineering, cutover gated on seven consecutive green days — that pattern works for any migration, not just this one. If a panel reviewer takes one thing away from the design, I'd want it to be that.

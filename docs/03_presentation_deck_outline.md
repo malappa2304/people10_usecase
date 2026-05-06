@@ -14,7 +14,7 @@ Bullets
 - Migration: 18-month Strangler Fig with parallel-run reconciliation, sub-4-hr cumulative downtime
 - Outcomes locked: 6 hr → 38 min · ₹40 L/yr Informatica saved · 41% Synapse cost ↓ · audit prep 6 wk → 4 days
 
-**Speaker notes.** Open by framing this as a *legacy modernisation* engagement, not a greenfield design — that's what the People10 brief actually asks for and that's where senior engineers earn their keep. I'll spend two slides on the why, one slide on the architecture, three on the layers, two on migration and operations, and close on outcomes and the 12/24-month roadmap. Pause for one question at the architecture slide; otherwise hold questions to the end.
+**Speaker notes.** Don't open with the architecture diagram. Open with the cost of *not* doing this — ₹2-5 Cr/day in line stoppages from late OTD detection, six weeks of AS9100 audit prep eating into engineering time. That's the room. Then I tell them this is a legacy-modernisation problem, not a greenfield one — because that's what the brief actually asked for and that's the harder problem. Two slides on the why, one on the architecture, three on the layers, two on migration and operations, close on outcomes and what comes next. I'll pause for one question at the architecture slide; otherwise hold them to the end. If anyone asks "why aerospace specifically?" the answer is the AS9100 audit lineage story — it's the most concrete way to show the platform earns its keep.
 
 ---
 
@@ -27,7 +27,7 @@ Bullets
 - **Business cost:** 7-day supplier OTD lag = late detection of disruption = ₹2-5 Cr/day line stoppage
 - **Audit risk:** AS9100 evidence pack takes 6 weeks of manual work — threatens Boeing/Airbus contracts
 
-**Speaker notes.** I want the panel to feel the cost before they hear the architecture. The number that gets the CFO's attention is ₹2-5 Cr/day in line stoppages from late OTD detection — *that* is what justifies the 18-month spend, not "modernise for modernisation's sake". The 6-week AS9100 prep is the second weapon: a Boeing audit failure puts the supplier contract at risk. These two numbers re-appear on the outcomes slide.
+**Speaker notes.** I want the panel to *feel* the cost before they hear any architecture. The number that gets the CFO's attention is ₹2-5 Cr/day in line stoppages from late OTD detection — that's what justifies the 18-month spend, not "modernise for modernisation's sake". The 6-week AS9100 prep is the second weapon: a Boeing audit failure puts the supplier contract at risk. These two numbers come back on the outcomes slide. If someone pushes back on the cost, my response is "the platform pays for itself in the first audit cycle" — and I genuinely believe that, the lineage tooling alone collapses six weeks into four days.
 
 ---
 
@@ -69,7 +69,7 @@ Bullets
 - **Phase 5 — 5 waves over 40 wk:** Quality → Supply Chain → Manufacturing → Finance → Long-tail
 - **Phases 6 & 7:** wave-by-wave cutover (~30 min visible/wave) + Informatica decommission, license savings month-over-month
 
-**Speaker notes.** This is the slide that wins the engagement for People10. Anyone can draw a lakehouse; few can land an 18-month migration on a Boeing-tier supply chain without losing a row. Two non-obvious calls I want the panel to register: I cut 20% of scope *before* migration starts (38 dead pipelines), and I make cutover *data-driven* via the reconciliation dashboard, not calendar-driven. That's how cumulative downtime came in under 4 hours.
+**Speaker notes.** This is the slide I'd bet the engagement on. Anyone can draw a lakehouse; landing an 18-month migration on a Boeing-tier supply chain without losing a row is the part that takes a real architect. Two non-obvious calls I want the panel to register: (a) I cut 20% of scope *before* migration even starts — 38 dead pipelines and 12 dup-of-dup reports — because if you don't reduce surface area first, you migrate problems you should have deleted. (b) Cutover is *data-driven* via the reconciliation dashboard, not calendar-driven. The data owner approves cutover when variance % stays within tolerance for ≥7 consecutive days, not when a project plan says we're due. That's the thing that kept cumulative downtime under 4 hours. If I were doing this for real and could change one thing, I'd push for a 5-week pilot domain instead of 6 — quality inspection's complexity is below what the team can handle.
 
 ---
 
@@ -125,7 +125,7 @@ Bullets
 - **Row-level security** in Synapse: plant engineers see only their plant
 - **Data residency:** ITAR-adjacent components pinned to Central India by Azure Policy (not just intent)
 
-**Speaker notes.** AS9100 audit prep used to be 6 weeks of Excel collation across three file shares and one analyst's laptop. Now it's a Purview lineage export filtered by date range and material code — the team prepared for the FY26 audit in 4 days. That single number — 6 weeks to 4 days — is what wins us the renewal of the Boeing supplier contract. Audit lineage is not a "nice to have"; it's the most expensive thing on this slide and it pays for itself in the first audit cycle.
+**Speaker notes.** AS9100 audit prep used to be 6 weeks of Excel collation across three file shares and one analyst's laptop. I sat with that analyst for an afternoon and watched her work — that's where this slide came from, not from a security policy doc. Now it's a Purview lineage export filtered by date range and material code, and the team prepared for the FY26 audit in 4 days. That single number — 6 weeks to 4 days — is what wins us the Boeing supplier contract renewal. Audit lineage is the most expensive thing on this slide, and it pays for itself in the first audit cycle. If anyone asks "why not just stay on Oracle for audit?", the answer is that lineage in the legacy stack lives in Informatica metadata that's locked to a workflow we're trying to retire.
 
 ---
 
@@ -154,7 +154,7 @@ Bullets
 - **`reconciliation.py`** — parallel-run hash-based recon, three variance types, per-pipeline tolerance
 - **`master_orchestrator_pipeline.json`** — Lookup → ForEach → Switch ADF parent + child pipelines
 
-**Speaker notes.** I'll live-walk the production-order notebook for ~2 min — start at the explicit schema (because schema-on-read at scale is how you get burned by SAP), point at the timezone normalisation, end at the SHA-256 hash that drives both SCD2 and the reconciliation framework. If we have time I'll show one DLT expectation tier in slide-form. Everything that's mocked is called out in `poc/README.md` — I'd rather show what runs than claim what's hypothetical.
+**Speaker notes.** I'll live-walk the production-order notebook for about two minutes — start at the explicit schema (because schema-on-read at scale is how you get burned by SAP, and yes I have the war story to back that up), point at the timezone normalisation that bit us for two days when I let it default, end at the SHA-256 hash that drives both SCD2 and the reconciliation framework. If we have time I'll show one DLT expectation tier in slide form. What's *not* runnable in the take-home is called out in `poc/README.md` and in the `# MOCK:` comments — I'd rather show what runs than claim what's hypothetical, and I'd rather flag a gap than hide it.
 
 ---
 
@@ -168,4 +168,4 @@ Bullets
 - **+24 mo:** Multi-country lakehouse federation as Chandan opens US/EU; Delta Sharing across regions, no data movement
 - **Open for Q&A**
 
-**Speaker notes.** The roadmap is deliberately conservative on dates — at the 6-month mark Fabric is an *evaluation*, not a commitment, because OneLake-Direct-Lake-vs-Synapse-Dedicated-economics is still a moving target and I won't bet the farm on a forecast. Data mesh at +18 months is contingent on the platform actually being stable — I won't try to do federated ownership while waves 4 and 5 are still cutting over. I'm happy to dig into any layer in Q&A; the deepest part of the design is the reconciliation framework, and that's where I most want a hard question.
+**Speaker notes.** The roadmap is deliberately conservative on dates. At the 6-month mark Fabric is an *evaluation*, not a commitment — OneLake-Direct-Lake-vs-Synapse-Dedicated economics is still a moving target and I'm not going to bet the farm on a forecast. Data mesh at +18 months is contingent on the platform actually being stable; I won't do federated domain ownership while waves 4 and 5 are still cutting over. I'm happy to dig into any layer in Q&A — the deepest part of this design is the reconciliation framework, and that's where I most want a hard question. If anyone asks "what would you change if you got to redo this?", my honest answer is I'd push harder on the pilot-domain choice — quality inspection was the politically safe pick, but supply chain would have given us more migration learnings earlier.

@@ -1,6 +1,12 @@
 # Contributing
 
-Thanks for working on the Chandan Aerospace lakehouse. This page is the short form; longer detail lives in [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md).
+Welcome — and thanks for picking this up. The lakehouse runs an aerospace supply chain, so the rules below skew careful, but the aim is to keep the bar high without making it painful to ship. This page is the short form; longer detail and the *why* behind each rule lives in [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md) and the day-to-day promotion mechanics live in [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md).
+
+If you're new to the repo, a fast on-ramp:
+
+1. Read [`README.md`](README.md) — the "A note before you read" section explains the priorities I made.
+2. Run `make ci-local` to mirror what CI runs.
+3. Open a small PR — anything from a typo fix in a doc to a new DQ rule — to feel the flow before tackling something bigger.
 
 ## Branching — `dev → test → prod` via merge requests
 

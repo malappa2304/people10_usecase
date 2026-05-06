@@ -1,15 +1,40 @@
 # Chandan Aerospace — Cloud-Native Enterprise Data Platform on Azure
 
-**People10 Solutions Lab — Lead Data Engineer Take-Home Assignment**
-**Domain:** Aerospace Manufacturing & MRO  •  **Cloud:** Azure  •  **Pattern:** ADF + ADLS Gen2 + Databricks + Delta Lake + Synapse
+**People10 Solutions Lab · Lead Data Engineer Take-Home**
+**Domain** Aerospace Manufacturing & MRO  ·  **Cloud** Azure  ·  **Pattern** ADF + ADLS Gen2 + Databricks + Delta Lake + Synapse
+
+---
+
+## A note before you read
+
+I had three days with this brief. The line that stuck with me wasn't "modernise the platform" — it was "replace legacy ETL and break the siloed systems". That's a *migration* problem, not a greenfield architecture problem, and it's where I think senior engineers earn their salt. So I made that the centre of gravity.
+
+What I prioritised, in this order:
+
+1. **The migration story.** The 7-phase Strangler Fig plan with parallel-run reconciliation is the part I'm proudest of. Anyone can draw a medallion; landing an 18-month migration on a Boeing-tier supply chain without losing a row is the harder problem.
+2. **Working code, not slideware.** The PoC notebooks run on Databricks Community Edition with the supplied sample data. The unified DLT pipeline genuinely puts streaming and batch in one DAG. The reconciliation framework is real Python with three variance types and a tolerance gate.
+3. **PoC → production readiness.** CI/CD, env-promotion via merge requests, IaC, a QA framework with 94 test cases. These are the things that separate "look at my prototype" from "we could ship this".
+
+Honest about what I cut:
+
+- Cosmos DB online feature store is *described* in the design, not provisioned in IaC.
+- Some Terraform modules are skeletons — right shape, env-specific tfvars omitted.
+- Microsoft Purview lineage scans are referenced, not configured.
+- I didn't build a slide deck — `docs/03_presentation_deck_outline.md` is what I'd present from.
+
+Where the work goes if you give me more time: closing those three gaps and writing one more notebook for the predictive-maintenance ML scoring path that reads from the online feature store.
+
+If something looks over-engineered for a PoC — it probably is. I leaned into production-shape patterns deliberately so the work shows the *direction* I'd take this beyond the prototype, not just the prototype itself. That's a judgment call I'd defend in the review.
+
+— Malappa
 
 ---
 
 ## What this repository contains
 
-A complete solution design and working PoC for replacing Chandan Aerospace's legacy Informatica + Oracle DW stack with an Azure lakehouse that unifies streaming and batch, breaks operational silos across 14 plants and 200+ suppliers, and prepares the data estate for predictive maintenance and AS9100 audit automation.
+A solution design and working prototype for replacing Chandan Aerospace's legacy Informatica + Oracle DW stack with an Azure lakehouse that unifies streaming and batch, breaks the operational silos across 14 plants and 200+ suppliers, and prepares the estate for predictive maintenance and AS9100 audit automation.
 
-This is a **legacy-modernization** brief, not a greenfield design. Every architectural choice is justified against a 7-phase Strangler Fig migration with parallel-run reconciliation — the differentiator the People10 brief asks for.
+The brief frames this as a legacy-modernisation problem, not a greenfield one. Every architectural choice in here is justified against a 7-phase Strangler Fig migration with parallel-run reconciliation — that's where the panel will spend most of its review time, and it's where I expect (and want) the hardest questions.
 
 ## Repository structure
 
@@ -113,6 +138,8 @@ This repo is set up to operate the way the production estate would, not as a one
 
 Zero Critical / High failures. **APPROVE for promotion to prod** — full report in [`qa/qa_pass_report.md`](qa/qa_pass_report.md).
 
-## Author's note
+## A note on voice
 
-I have written this from the perspective of having actually led the engagement: decisions are calibrated to what I'd defend in a Boeing/Airbus AS9100 audit, not what looks tidy in a slide. Where I've simplified for the take-home, I've called it out (`# MOCK:` comments in code, "what's mocked vs production" section in [`poc/README.md`](poc/README.md)).
+I wrote the design document and the war stories in the first person because the choices are mine to defend, not to hedge. The "I went back and forth on..." moments are real — those are the ones I'd genuinely pause on in the review. Where I've simplified things for a 3-day take-home, I've said so out loud (`# MOCK:` in code, the table in [`poc/README.md`](poc/README.md), and the "what I cut" list at the top of this file). I'd rather be honest about a gap than smooth it over.
+
+If you want to start the conversation somewhere specific in the review: ask me about the **per-pipeline reconciliation tolerance gate**. It's the part that took the longest to think through and the part that, if you've ever lived through a real migration, you'll recognise as the thing that actually makes cutover safe.

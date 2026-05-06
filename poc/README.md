@@ -1,6 +1,8 @@
 # PoC — Chandan Aerospace Lakehouse
 
-This directory holds a **runnable** proof-of-concept for the design described in `../docs/02_design_document.md`. It is deliberately scoped down from the full production estate so that a reviewer can clone, run, and read the result in well under an hour. Anything that has been simplified for the take-home is called out below — I'd rather show what runs than claim what's hypothetical.
+This is the working subset of the solution. Five Databricks notebooks, one DLT pipeline that puts streaming and batch in a single DAG, an ADF master orchestrator with four child pipelines, Synapse DDL plus four analytics queries, Terraform/Bicep skeletons, pytest tests, and synthetic sample data. The point isn't to be exhaustive — it's to show that the design in `../docs/02_design_document.md` actually *runs*, with the awkward bits (SAP timezone normalisation, hash-based SCD2, idempotent streaming MERGE on driver restart) handled in a way I'd defend in production.
+
+Anything that's been simplified for a 3-day take-home is called out below — I'd rather flag what's mocked than claim what's hypothetical.
 
 ## Layout
 
