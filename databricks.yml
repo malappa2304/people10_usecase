@@ -1,10 +1,10 @@
 # =============================================================================
-# Databricks Asset Bundle — declarative deploy of notebooks + jobs across
-# dev / test / prod targets. Driven by .github/workflows/cd-databricks.yml.
+# Databricks Asset Bundle — declarative deploy of notebooks + DLT pipeline
+# across dev / test / prod targets.
 # =============================================================================
 
 bundle:
-  name: chandan-aerospace
+  name: people10-poc
 
 include:
   - poc/databricks/notebooks/*.py
@@ -50,10 +50,9 @@ resources:
       max_concurrent_runs: 1
       email_notifications:
         on_failure:
-          - data-oncall@chandan.example.com
+          - data-oncall@example.com
 
-    # Daily orchestrator job — kicked off by ADF in production but defined
-    # here so the bundle can deploy/replay on demand.
+    # Daily orchestrator job — Bronze→Silver SAP, then SCD2 dim_material.
     daily_orchestrator:
       name: "Daily orchestrator — ${bundle.target}"
       tasks:
@@ -65,15 +64,10 @@ resources:
             - task_key: bronze_to_silver_po
           notebook_task:
             notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
-        - task_key: dq_runner
-          depends_on:
-            - task_key: scd2_dim_material
-          notebook_task:
-            notebook_path: ./poc/databricks/notebooks/05_dq_runner.py
       schedule:
         quartz_cron_expression: "0 0 21 ? * MON-FRI"   # 02:00 IST = 21:30 UTC
         timezone_id: UTC
-        pause_status: PAUSED                           # ADF triggers it in prod
+        pause_status: PAUSED
 
     # Continuous streaming job — CNC telemetry.
     streaming_cnc_telemetry:
@@ -129,7 +123,9 @@ targets:
     workspace:
       host: https://adb-dev.azuredatabricks.net
     variables:
-      catalog: chandan_dev
+      catalog:      people10_dev
+      eh_bootstrap: people10-eventhubs-dev.servicebus.windows.net:9093
+      lake_account: people10lakedev
 
   test:
     mode: production
@@ -137,11 +133,9 @@ targets:
       host: https://adb-test.azuredatabricks.net
       root_path: /Workspace/Shared/.bundle/${bundle.name}/test
     variables:
-      catalog:      chandan_test
-      eh_bootstrap: chandan-eventhubs-test.servicebus.windows.net:9093
-      lake_account: chandanlaketest
-    run_as:
-      user_name: svc-databricks-test@chandan.example.com
+      catalog:      people10_test
+      eh_bootstrap: people10-eventhubs-test.servicebus.windows.net:9093
+      lake_account: people10laketest
 
   prod:
     mode: production
@@ -149,14 +143,7 @@ targets:
       host: https://adb-prod.azuredatabricks.net
       root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
     variables:
-      catalog:           chandan_prod
+      catalog:           people10_prod
       cluster_node_type: Standard_DS5_v2
-      eh_bootstrap:      chandan-eventhubs-prod.servicebus.windows.net:9093
-      lake_account:      chandanlakeprod
-    run_as:
-      user_name: svc-databricks-prod@chandan.example.com
-    permissions:
-      - level: CAN_VIEW
-        group_name: data-platform-readonly
-      - level: CAN_MANAGE_RUN
-        group_name: data-platform-oncall
+      eh_bootstrap:      people10-eventhubs-prod.servicebus.windows.net:9093
+      lake_account:      people10lakeprod

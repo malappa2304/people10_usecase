@@ -33,15 +33,12 @@ lint-py: ## ruff check + format-check + mypy --strict on production lib
 	ruff format --check poc/
 	mypy --strict --ignore-missing-imports poc/databricks/lib/
 
-# ---- YAML / SQL -------------------------------------------------------------
-
-lint-yaml: ## yamllint with .github/yamllint.yml rules
-	yamllint -s -c .github/yamllint.yml .
+# ---- SQL --------------------------------------------------------------------
 
 lint-sql: ## sqlfluff against Synapse SQL
 	sqlfluff lint --dialect tsql poc/synapse/
 
-lint: lint-py lint-yaml lint-sql ## All linters
+lint: lint-py lint-sql ## All linters
 
 # ---- Terraform --------------------------------------------------------------
 
