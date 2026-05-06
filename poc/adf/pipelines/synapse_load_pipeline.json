@@ -1,0 +1,81 @@
+{
+  "name": "pl_synapse_load",
+  "properties": {
+    "description": "Gold Delta → Synapse Dedicated. Uses PolyBase via staging on ADLS for parallel load.",
+    "parameters": {
+      "runDate": { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "Lookup_GoldTablesToLoad",
+        "type": "Lookup",
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT gold_table_name, synapse_table_name, load_mode FROM dbo.synapse_load_config WHERE is_active = 1"
+          },
+          "dataset": { "referenceName": "ds_azuresql_source_config", "type": "DatasetReference" },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "ForEach_GoldTable",
+        "type": "ForEach",
+        "dependsOn": [
+          { "activity": "Lookup_GoldTablesToLoad", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "items": { "value": "@activity('Lookup_GoldTablesToLoad').output.value", "type": "Expression" },
+          "isSequential": false,
+          "batchCount": 4,
+          "activities": [
+            {
+              "name": "Copy_Gold_To_Synapse",
+              "type": "Copy",
+              "policy": { "timeout": "0.01:30:00", "retry": 2, "retryIntervalInSeconds": 60 },
+              "typeProperties": {
+                "source": {
+                  "type": "DeltaSource",
+                  "storeSettings": { "type": "AzureBlobFSReadSettings" }
+                },
+                "sink": {
+                  "type": "SqlDWSink",
+                  "preCopyScript": {
+                    "value": "@if(equals(item().load_mode,'TRUNCATE_AND_LOAD'), concat('TRUNCATE TABLE ', item().synapse_table_name), '')",
+                    "type": "Expression"
+                  },
+                  "allowPolyBase": true,
+                  "polyBaseSettings": {
+                    "rejectValue": 0,
+                    "rejectType": "value",
+                    "useTypeDefault": true
+                  },
+                  "tableOption": "autoCreate",
+                  "writeBehavior": "Insert"
+                },
+                "enableStaging": true,
+                "stagingSettings": {
+                  "linkedServiceName": { "referenceName": "ls_adls_staging", "type": "LinkedServiceReference" },
+                  "path": "staging/synapse_load"
+                },
+                "parallelCopies": 8,
+                "dataIntegrationUnits": 32
+              },
+              "inputs": [{
+                "referenceName": "ds_delta_gold",
+                "type": "DatasetReference",
+                "parameters": { "tableName": "@item().gold_table_name" }
+              }],
+              "outputs": [{
+                "referenceName": "ds_synapse_dedicated",
+                "type": "DatasetReference",
+                "parameters": { "tableName": "@item().synapse_table_name" }
+              }]
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": ["synapse-load"]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "ds_sap_cdc_table",
+  "properties": {
+    "description": "SAP CDC source dataset, parameterised by ODP source object (table or extractor name).",
+    "linkedServiceName": { "referenceName": "ls_sap_cdc", "type": "LinkedServiceReference" },
+    "parameters": {
+      "tableName": { "type": "String" }
+    },
+    "type": "SapOdpResource",
+    "typeProperties": {
+      "context": "ABAP_CDS",
+      "objectName": { "value": "@dataset().tableName", "type": "Expression" }
+    }
+  }
+}

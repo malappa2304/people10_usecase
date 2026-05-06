@@ -1,0 +1,21 @@
+{
+  "name": "ls_databricks",
+  "properties": {
+    "description": "Azure Databricks workspace — managed identity auth, no service principal.",
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "https://adb-1234567890123456.7.azuredatabricks.net",
+      "workspaceResourceId": "/subscriptions/<sub-id>/resourceGroups/rg-chandan-prod/providers/Microsoft.Databricks/workspaces/dbx-chandan-prod",
+      "authentication": "MSI",
+      "newClusterNodeType": "Standard_DS4_v2",
+      "newClusterNumOfWorker": "2:8",
+      "newClusterSparkVersion": "14.3.x-photon-scala2.12",
+      "newClusterSparkConf": {
+        "spark.databricks.delta.preview.enabled": "true",
+        "spark.databricks.io.cache.enabled": "true",
+        "spark.sql.adaptive.enabled": "true",
+        "spark.sql.adaptive.skewJoin.enabled": "true"
+      }
+    }
+  }
+}

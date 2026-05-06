@@ -1,0 +1,63 @@
+# =============================================================================
+# reconciliation_tolerance.yaml
+#
+# Per-pipeline variance tolerance for the parallel-run reconciliation framework.
+# Values come from the data owner, NOT engineering. A pipeline is cutover-ready
+# when variance % is below this tolerance for >= 7 consecutive days.
+#
+# Tolerance > 0 is acceptable when:
+#   * source has natural late arrivals (SAP postings backdated by 24-48h)
+#   * legacy was rounding differently (e.g. truncation vs banker's rounding)
+#   * a known timezone bug in legacy was preserved for historical-report parity
+# =============================================================================
+
+reconciliations:
+
+  - pipeline_name: silver_to_gold_supplier_otd
+    legacy_table:  oracle_dw.f_supplier_otd
+    new_table:     gold.fact_supplier_otd
+    business_keys: [purchase_order_id]
+    value_cols:    [supplier_id, plant_code, material_id, expected_date_utc, actual_delivery_ts_utc, delivery_qty, otd_status]
+    variance_tolerance_pct: 0.10
+    consecutive_green_days_required: 7
+    data_owner: supply-chain-analytics
+    notes: |
+      Tight tolerance — supplier OTD is the headline business metric. The
+      0.1% allowance is for SAP postings that arrive >24h late.
+
+  - pipeline_name: bronze_to_silver_production_order
+    legacy_table:  oracle_dw.f_production_order
+    new_table:     silver.production_order
+    business_keys: [production_order_id]
+    value_cols:    [plant_code, material_id, quantity, status, posting_ts_utc]
+    variance_tolerance_pct: 0.50
+    consecutive_green_days_required: 7
+    data_owner: manufacturing-ops
+    notes: |
+      Wider tolerance because legacy used IST for posting_ts and we normalise
+      to UTC; some boundary-day rows shift cohort.
+
+  - pipeline_name: scd2_dim_material
+    legacy_table:  oracle_dw.d_material
+    new_table:     gold.dim_material
+    business_keys: [material_id]
+    value_cols:    [material_description, material_group, uom, criticality_class, is_aerospace_grade]
+    variance_tolerance_pct: 0.05
+    consecutive_green_days_required: 14    # dimension changes are slow — need longer window
+    data_owner: master-data-team
+    notes: |
+      Strict — material master is the source of truth for aerospace-grade flag.
+      Two weeks of green is the gate before retiring legacy MAT_MASTER mapping.
+
+  - pipeline_name: streaming_cnc_telemetry
+    legacy_table:  oracle_dw.f_machine_status_15min   # legacy was 15-min, not 1-min
+    new_table:     silver.cnc_telemetry_1min
+    business_keys: [plant_code, machine_id, window_start_utc]
+    value_cols:    [vibration_g_avg, temperature_c_avg, spindle_rpm_avg]
+    variance_tolerance_pct: 5.0     # higher tolerance — granularity changed
+    consecutive_green_days_required: 14
+    data_owner: maintenance-engineering
+    notes: |
+      Legacy was 15-min rollups; new is 1-min. We re-aggregate new to 15-min
+      for the reconciliation comparison; small variance from sub-15-min late
+      arrivals is expected and accepted.

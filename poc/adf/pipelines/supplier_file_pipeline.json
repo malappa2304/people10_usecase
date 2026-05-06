@@ -1,0 +1,91 @@
+{
+  "name": "pl_supplier_file",
+  "properties": {
+    "description": "Supplier portal SFTP → Bronze. One pipeline per supplier_group; per-supplier overrides via source_config.",
+    "parameters": {
+      "sourceId":         { "type": "Int" },
+      "entity":           { "type": "String" },
+      "targetBronzePath": { "type": "String" },
+      "runDate":          { "type": "String" }
+    },
+    "activities": [
+      {
+        "name": "GetMetadata_SFTP_Listing",
+        "type": "GetMetadata",
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "ds_sftp_supplier_dispatch",
+            "type": "DatasetReference",
+            "parameters": { "sourceId": "@pipeline().parameters.sourceId" }
+          },
+          "fieldList": ["childItems"]
+        }
+      },
+      {
+        "name": "Filter_NewFiles",
+        "type": "Filter",
+        "dependsOn": [
+          { "activity": "GetMetadata_SFTP_Listing", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "items": { "value": "@activity('GetMetadata_SFTP_Listing').output.childItems", "type": "Expression" },
+          "condition": {
+            "value": "@and(equals(item().type,'File'), endswith(item().name,'.csv'))",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ForEach_File",
+        "type": "ForEach",
+        "dependsOn": [
+          { "activity": "Filter_NewFiles", "dependencyConditions": ["Succeeded"] }
+        ],
+        "typeProperties": {
+          "items": { "value": "@activity('Filter_NewFiles').output.value", "type": "Expression" },
+          "isSequential": false,
+          "batchCount": 4,
+          "activities": [
+            {
+              "name": "Copy_File_To_Bronze",
+              "type": "Copy",
+              "policy": { "timeout": "0.00:30:00", "retry": 3, "retryIntervalInSeconds": 30 },
+              "typeProperties": {
+                "source": {
+                  "type": "DelimitedTextSource",
+                  "storeSettings": { "type": "SftpReadSettings" },
+                  "formatSettings": { "type": "DelimitedTextReadSettings" }
+                },
+                "sink": {
+                  "type": "DelimitedTextSink",
+                  "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+                  "formatSettings": { "type": "DelimitedTextWriteSettings", "fileExtension": ".csv" }
+                }
+              },
+              "inputs": [{
+                "referenceName": "ds_sftp_supplier_dispatch",
+                "type": "DatasetReference",
+                "parameters": {
+                  "sourceId": "@pipeline().parameters.sourceId",
+                  "fileName": "@item().name"
+                }
+              }],
+              "outputs": [{
+                "referenceName": "ds_adls_bronze",
+                "type": "DatasetReference",
+                "parameters": {
+                  "path": {
+                    "value": "@concat(pipeline().parameters.targetBronzePath, '/ingest_date=', pipeline().parameters.runDate)",
+                    "type": "Expression"
+                  },
+                  "fileName": "@item().name"
+                }
+              }]
+            }
+          ]
+        }
+      }
+    ],
+    "annotations": ["supplier-sftp"]
+  }
+}

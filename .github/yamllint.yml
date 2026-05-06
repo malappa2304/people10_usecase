@@ -1,0 +1,20 @@
+# yamllint config used by CI · ci.yml · lint-yaml job
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']    # GitHub Actions uses 'on'
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+  document-start: disable
+
+ignore: |
+  poc/databricks/notebooks/   # Databricks py source files contain MAGIC YAML cells

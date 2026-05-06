@@ -1,0 +1,61 @@
+# =============================================================================
+# .gitignore — Chandan Aerospace lakehouse
+# =============================================================================
+
+# --- Python / pytest -------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Terraform -------------------------------------------------------------
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+crash.log
+crash.*.log
+
+# --- Databricks ------------------------------------------------------------
+.databricks/
+*.bundle.lock
+
+# --- Bicep ARM build output -----------------------------------------------
+*.json.bak
+infrastructure/bicep/*.json    # compiled ARM (committed via release artefact instead)
+!infrastructure/bicep/*.bicep  # source of truth
+
+# --- IDE / editor ----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS --------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --- Local secrets (never commit) -----------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.pfx
+
+# --- CI artefacts (uploaded as workflow artefacts, not committed) ---------
+checkov.sarif
+tfsec.sarif
+sbom.cdx.json
+plan.txt
+drift.txt
+
+# --- Sample data outputs ---------------------------------------------------
+poc/sample_data/_processed/
