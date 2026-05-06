@@ -1,193 +1,235 @@
-# Design Document — Cloud-Native Enterprise Data Platform for Chandan Aerospace
+# Design Document — Cloud-Native Data Platform on Azure
 
-**Author:** Lead Data Engineer, People10 Solutions Lab
-**Cloud:** Azure (ADF + ADLS Gen2 + Databricks + Delta Lake + Synapse)
-**Domain:** Aerospace Manufacturing & MRO
-**Status:** Solution design + working PoC for People10 take-home review
+**3-day take-home for People10 Solutions Lab.**
+A modern lakehouse on Azure that unifies streaming and batch, supports analytics, and prepares data for AI/ML — mapped against the seven *Key Areas to Cover* from the brief.
 
 ---
 
-## 1. Executive Summary
+## 1. Executive summary
 
-Chandan Aerospace runs 14 plants and 200+ tier-1/2 suppliers on an estate stitched together with Informatica PowerCenter and an Oracle data warehouse. After ten years, that stack is the bottleneck: 200+ mappings, 6-hour batch windows, ₹40 L/year of licenses, and zero streaming. Auditors take six weeks to assemble AS9100 evidence. A single supplier disruption goes undetected for seven days because OTD reporting lags. One late part can cost ₹2-5 Cr/day in line stoppages.
+The brief asks for an end-to-end data platform that replaces siloed legacy ETL with something that scales, runs both streaming and batch on the same engine, and lets the data be used for analytics *and* AI/ML without a second pipeline. I chose **Azure** because the brief allowed any cloud and Azure has the most mature single-vendor story for this stack: ADLS Gen2 for storage, Databricks for compute, Delta Lake as the open table format, Synapse as the serving layer, Event Hubs for streaming ingestion.
 
-I designed a cloud-native lakehouse on Azure that **replaces** Informatica with Azure Data Factory (ADF), **unifies** 12 K events/sec of CNC telemetry with batch CDC from SAP S/4HANA / MES / Teamcenter on the same Delta Lake, **breaks the silos** across plants and suppliers into four conformed facts, **delivers** sub-minute streaming insight alongside Power BI executive views, and **prepares** the estate for predictive-maintenance ML and AS9100 audit automation.
+The architecture is a **medallion lakehouse** (Bronze → Silver → Gold) on Delta Lake. Streaming and batch sources both land in the *same* Bronze tables. From there, one set of Silver and Gold tables serves three consumers: real-time dashboards, ad-hoc + executive analytics, and the offline + online feature stores for ML.
 
-All five People10 brief requirements are addressed explicitly: **(1)** modern lakehouse over legacy DW, **(2)** unified streaming + batch on Delta, **(3)** sub-minute Gold freshness for OEE and supplier OTD, **(4)** Synapse Serverless + Dedicated for analytics with 50+ concurrent BI users, **(5)** offline + online feature stores for AI/ML.
+I picked manufacturing as the use case (ERP + supplier files for batch, machine telemetry for streaming) because it produces realistic data flows — but the architecture is general. Locked-metric numbers like throughput and concurrency are illustrative targets, not measured production results.
 
-The migration is not a big-bang. I led a 7-phase Strangler Fig plan over 18 months with parallel-run reconciliation as the cutover gate: zero data loss, sub-4-hour cumulative business-visible downtime. Quantified outcomes the business signs off on: **6 hr → 38 min** batch runtime, **6 weeks → 4 days** AS9100 audit prep, **99.5%** Gold freshness SLA, **41%** Synapse cost reduction, **27%** overall platform reduction, **₹40 L/year** of Informatica license savings reinvested into the team.
+## 2. Architecture overview
 
-## 2. Business Context — Three Structural Problems
+The diagram is in [`01_architecture_diagram.md`](01_architecture_diagram.md). In words:
 
-### 2.1 Legacy ETL is the bottleneck
-Informatica PowerCenter has been Chandan's spine for a decade. We inventoried 200+ mappings; 38 of them were dead (not run in >180 days) and another 47 had source-table drift bugs the team worked around manually. Batch windows had grown from a planned 3 h to 6 h as new plants were onboarded, eating into business-hours analytics. Streaming was simply not on the menu — "near-real-time" meant a 15-minute mini-batch tacked on for one report. License cost: roughly ₹40 L/year, plus a non-trivial tribal-knowledge tax — the two engineers who knew the SAP-to-DW mapping had both moved on.
+- Streaming sources land via **Azure Event Hubs (Kafka API)**.
+- Batch sources land via **Auto Loader** on file drops in ADLS Bronze. In production an orchestrator (Azure Data Factory, with SHIR for on-prem connectivity, or a Databricks Workflow) would copy upstream files into Bronze; in this PoC the DLT pipeline reads directly from ADLS so the unification claim is in one place.
+- All sources write into ADLS Gen2 **Bronze** containers.
+- **Databricks** (PySpark + Lakeflow Declarative Pipelines / DLT) curates Bronze → Silver → Gold.
+- **Silver and Gold are Delta Lake** under Unity Catalog.
+- **Synapse Serverless** reads Gold Delta directly for ad-hoc SQL.
+- **Synapse Dedicated** is fed via PolyBase for executive Power BI dashboards.
+- **Cosmos DB** materialises the online feature store from Gold for sub-100 ms ML inference.
 
-### 2.2 Silos are blocking the business outcomes
-Five systems, five analytics islands. SAP S/4HANA owns the production order. Siemens Teamcenter owns the bill of materials and engineering changes. The shop-floor MES owns work order execution and yield. The CNC machines pump OPC-UA telemetry but nothing lands anywhere queryable. Supplier dispatch comes in by SFTP, EDI, and — more often than anyone admits — Excel attachments. There is no joinable view of *one production order, across all of them*. The cost surfaces in two places: supplier on-time-delivery (OTD) is reported on a 7-day lag (so the first time the team learns about a disruption is after the line has already stopped), and AS9100 audits eat 6 weeks of manual evidence collection because the lineage from a flagged part back to its supplier batch and CNC vibration log lives in three different file shares and one analyst's laptop.
+Cross-cutting layers (governance, security, observability) are described in §7-8, not drawn in the diagram, to keep the picture readable.
 
-### 2.3 Scale and cost are pinching every quarter
-Oracle DW is sized for the *current* shape of the business, not the next five years. Adding the Hyderabad-2 plant in the next FY needs another shelf of capacity that nobody wants to budget for. The 12 K events/sec from CNC machines is the elephant: there is literally no path to predictive maintenance ML on this volume without throwing the data into something else. And every new plant means more Informatica connectors and more ETL surface area to maintain.
+## 3. Batch & streaming ingestion
 
-## 3. Use Case & Requirements
+### 3.1 Pattern — same medallion, two arrows in
 
-The People10 brief asks for a modern data platform that does five things: lakehouse over legacy DW; unified streaming + batch; real-time insight; analytics for BI and ad-hoc; AI/ML readiness. Mapping that to Chandan:
+The unification I care about is at the *table* layer: streaming events and batch files end up writing to the same Bronze table family. Downstream code reads "Bronze" without caring which arrow it came from. The DLT pipeline in `poc/databricks/pipelines/unified_medallion_dlt.py` shows this concretely:
 
-| People10 requirement | Chandan use case |
-| --- | --- |
-| Lakehouse, not legacy DW | Replace Oracle DW + Informatica with Delta Lake + ADF |
-| Unify streaming + batch | Same Delta tables fed by Event Hubs (CNC) and SAP CDC (orders) |
-| Real-time insight | Sub-minute supplier OTD + plant OEE; 30-sec Gold for OEE board |
-| Analytics support | Synapse Serverless (ad-hoc) + Synapse Dedicated (executive Power BI, 50+ concurrent) |
-| AI/ML readiness | Offline feature store on Gold Delta + online store on Cosmos DB for predictive maintenance |
+- `bronze_cnc_telemetry` — Kafka source via `spark.readStream.format("kafka")`
+- `bronze_sap_production_order` — file source via `spark.readStream.format("cloudFiles")` (Auto Loader)
 
-Non-functional anchors: AS9100 + DGCA airworthiness audit lineage; ITAR-adjacent components hosted in **Central India** region only; 99.5% Gold freshness SLO; 18-month migration with sub-4-hour cumulative downtime; team of 1 architect + 6 engineers + 2 analysts.
+Both use the same `@dlt.table` decorator. Auto Loader's incremental file processing is just a streaming source over file events.
 
-## 4. Solution Architecture Overview
+### 3.2 Choices
 
-The canonical picture is in `01_architecture_diagram.md`. In words: sources land into ADLS Gen2 Bronze either via ADF (batch, through a Self-Hosted Integration Runtime for on-prem SAP / MES / Teamcenter) or via Event Hubs (streaming OPC-UA from CNC machines). Databricks (PySpark + Delta Live Tables) curates Bronze → Silver → Gold. Synapse Serverless reads Gold Delta directly for ad-hoc; Synapse Dedicated is fed via PolyBase for executive Power BI dashboards that need predictable concurrency. Unity Catalog and Purview cut across every layer for access control, lineage, and the AS9100 audit trail. Key Vault, Private Endpoints, and Defender for Cloud handle security; Azure Monitor + Log Analytics + a custom audit Delta table handle observability.
+- **Event Hubs Kafka API over Confluent.** Managed by Azure, integrates natively with AAD, no additional vendor. Confluent is better at huge scale (>100K eps) for its Schema Registry and ksqlDB, but for this PoC the trade-off doesn't pay off.
+- **ADF as orchestrator over Airflow.** ADF has a first-class SAP CDC connector and Self-Hosted Integration Runtime for on-prem sources, both useful for legacy migration scenarios. Airflow we'd self-host.
+- **Auto Loader over manual `spark.read.json`.** Schema evolution + incremental file detection are first-class. The `cloudFiles.schemaEvolutionMode = "addNewColumns"` mode handles real-world supplier-side schema drift without breaking the pipeline.
 
-The medallion is non-negotiable. **Bronze** is raw and immutable so we can re-derive Silver from source if the transformation logic changes — the AS9100 auditor explicitly asks "show me the source row" and that has to be the *original* row, not a re-extract. **Silver** is conformed, deduped, SCD2-keyed, and Delta-encoded so we get ACID, time travel, and schema evolution. **Gold** is the four conformed facts and their dimensions: `fact_production_order`, `fact_supplier_otd`, `fact_quality_inspection`, `fact_machine_telemetry`, plus `dim_material`, `dim_supplier`, `dim_workcenter`, `dim_aircraft_component`. Streaming and batch land into the *same* Silver and Gold tables — that is what unification means in practice.
+## 4. Data processing & transformation
 
-## 5. Migration Strategy — Strangler Fig in Seven Phases
+The PoC uses **two patterns**. Each one suits different work.
 
-Big-bang migration on a Boeing/Airbus-tier supply-chain estate is malpractice. I chose a Strangler Fig pattern: stand the new platform up alongside Informatica + Oracle DW, route source data into both, and migrate one *business domain* at a time only after a parallel-run reconciliation says we're identical within tolerance.
+### 4.1 Pattern A — Declarative pipelines (DLT)
 
-| Phase | Duration | What I led | Risk-bearing decision |
-| --- | --- | --- | --- |
-| 1. Discovery | 4 weeks | Reverse-engineer 200+ Informatica mappings via PowerCenter metadata APIs; produce a dependency graph. | Decommission 38 dead pipelines and 12 dup-of-dup reports *before* migration. 20% scope reduction up front saved roughly 4 months over the lifecycle. |
-| 2. Foundation | 8 weeks | Stand up Unity Catalog, the metadata-driven ADF framework, the `PipelineRun` audit context manager, the CI/CD chassis, the parallel-run reconciliation skeleton. | No data movement yet — only chassis. Reviewers always want to skip this. Don't. |
-| 3. Pilot domain | 6 weeks | Quality Inspection (8 mappings, lowest fan-in, lowest political stakes). Prove the playbook end-to-end including reconciliation. | Pick a domain you can *afford* to be wrong about. |
-| 4. Reconciliation framework | 4 weeks (parallel) | Both stacks read the same source. Daily FULL OUTER JOIN with hash-based row compare. Per-pipeline variance tolerance owned by the data owner, not engineering. | We *measure* parity before we *claim* it. |
-| 5. Domain waves | 40 weeks (5 waves) | Quality → Supply Chain → Manufacturing → Finance → long-tail. Each wave: build, run parallel ≥ 4 weeks, reconcile, sign-off, cutover. | Order matters: lowest cross-domain coupling first, finance last (because it joins everything). |
-| 6. Per-wave cutover | ~30 min visible downtime per wave | Switch reporting endpoints, retire the matching Informatica workflow set. | Always at the *report* boundary, not the *table* boundary. |
-| 7. Decommission | 12 weeks (rolling) | Free Informatica licenses wave-by-wave. By month 18 the contract is not renewed. | Don't keep Informatica running "just in case" past wave +30 days — it's the most expensive insurance policy on Earth. |
+**File:** `poc/databricks/pipelines/unified_medallion_dlt.py`.
 
-**Reconciliation in detail.** Per pipeline, both platforms read the same source independently. Each day at 02:00 a Databricks job does a `FULL OUTER JOIN` between `legacy.<table>` and `gold.<table>` on the natural key, computes a SHA-256 over a canonical projection of the value columns, and writes one of three variance types — `MISSING_IN_NEW`, `MISSING_IN_LEGACY`, `VALUE_MISMATCH` — to a `reconciliation_results` Delta table. A Power BI dashboard surfaces variance % per pipeline; the data owner approves cutover only when variance < the per-pipeline tolerance for ≥ 7 consecutive days. Cutover is *data-driven*, not calendar-driven. (See `poc/databricks/lib/reconciliation.py`.)
+One pipeline does the whole flow:
 
-**Why not big-bang?** Because the business had a knife to our throat: AS9100 audit window, no production stop tolerance, no second chance. Strangler Fig let us *prove* parity domain-by-domain. Result: cumulative business-visible downtime over 18 months was under 4 hours, and zero data was lost.
+- Ingests **streaming** (Event Hubs) and **batch** (Auto Loader) into Bronze.
+- Applies inline data-quality checks at three severity tiers:
+  - `expect_or_fail` — halt the pipeline.
+  - `expect_or_drop` — quarantine the row, keep going.
+  - `expect` — emit a metric, no other effect.
+- Maintains the SCD2 dimension via `apply_changes`.
+- Produces a Gold materialised view that joins the streaming rollup with the batch dimension.
 
-## 6. Layer-by-Layer Design
+Why DLT here: lineage, autoscaling, retries, and the event log all come from the framework. Less plumbing to write and maintain.
 
-### 6.1 Ingestion (ADF as orchestrator, replacing Informatica)
+### 4.2 Pattern B — Imperative notebooks (PySpark)
 
-I made the call to use ADF as the *master* orchestrator instead of Synapse Pipelines or Airflow. Three reasons. First, ADF's Self-Hosted Integration Runtime (SHIR) is mature for on-prem SAP/MES connectivity — mandatory for Chandan since SAP S/4HANA is on-prem. Second, the SAP CDC connector is first-class on ADF and handles delta extraction natively (we are *not* hand-rolling watermarks against a SAP shadow table). Third, the team's existing Informatica skills translate directly into ADF's metadata-driven pattern.
+**Files:** `poc/databricks/notebooks/01_*.py`, `02_*.py`, `04_*.py`.
 
-**Pattern:** one parameterized parent pipeline driven by a `source_config` table in Azure SQL. The parent does a Lookup, a ForEach with `batchCount=8` for parallelism, and a Switch that branches on `source_type` (`db_cdc`, `sftp_file`, `api_rest`, `stream`) into a child pipeline per pattern. New sources are *configuration*, not code. (`poc/adf/pipelines/master_orchestrator_pipeline.json`.)
+Each notebook is wrapped in a `PipelineRun` audit chassis. That gives me three things on every run:
 
-**SHIR sizing.** Two-node SHIR cluster at each on-prem boundary (failover + concurrency). SAP CDC at peak runs 8 parallel extractions; MES JDBC pulls run 4 parallel.
+- A pipeline lock (no double-runs from ADF retries).
+- A watermark for incremental ingestion.
+- A structured row in `audit.pipeline_run` — what an auditor reads when something goes wrong.
 
-**Streaming.** Event Hubs (Kafka API) for OPC-UA from CNC machines. **32 partitions** keyed on `plant_code + machine_id`. We tested 16, 32, 64. Sixteen wedged tail latency at peak; sixty-four spent more time on coordinator overhead than throughput. Thirty-two is the elbow at 12 K events/sec. Watermark is 10 minutes — we tolerate 10-min late arrivals because flaky shop-floor wifi is real. State store is RocksDB on Databricks.
+I use this pattern where DLT can't comfortably express the work. The clearest example is the SAP timezone case in `01_bronze_to_silver_production_order.py`:
 
-**Tiered SLAs off the same source.** This is one of the patterns I'm most proud of: same Event Hubs source, three different consumers — a 30-sec trigger for the OEE board, a 5-min trigger for ML scoring, a `Trigger.AvailableNow` hourly job for AS9100 audit aggregation. Built once, used three ways.
+- SAP sends `posting_date` as a naive timestamp string (no timezone).
+- A separate `plant_timezone` column says which zone to interpret it in.
+- The code calls `to_utc_timestamp(col, tz)` per row.
 
-### 6.2 Processing & transformation (Databricks)
+Column-driven, source-specific transforms like this are awkward in DLT but natural in plain PySpark.
 
-Bronze → Silver: PySpark notebooks, scheduled by ADF via `DatabricksNotebookActivity`. Heavy lifting is here — SAP timezone normalization (we hit a war story where the same `posting_date` showed up as IST or UTC depending on which SAP instance, and our material ledger reconciliation was off by 5 h 30 m for two days), MES dedup with composite keys, supplier file parsing with schema-on-read.
+### 4.3 Which one to use
 
-Silver → Gold: **Delta Live Tables** declarative pipelines with built-in `EXPECT` constraints. DLT is a deliberate choice over more PySpark: declarative readability for the team, free expectations infra for DQ, and one-button restart on failure.
+> **Decision rule.** If the work can be expressed as `@dlt.table` + `expect`s + `apply_changes`, put it in `pipelines/`. Otherwise put it in `notebooks/` with the `PipelineRun` chassis.
 
-**SCD2.** Hash-based, not source CDC for dimensions. We compute a SHA-256 over a canonical projection of attributes, compare against current row's hash, expire and insert on mismatch. Source CDC was on the table (and is what Informatica used for `dim_material`) but it ties Silver to source change-tracking quirks; hash-based SCD is source-agnostic and lets us replay from Bronze. (`poc/databricks/lib/scd_helpers.py`.)
+For this take-home I deliberately kept both, to show the judgment call. In production I'd probably consolidate to DLT once the team is comfortable with it — that's an open question called out in `TODO.md`.
 
-**Compute.** Photon engine + AQE on every job. Spot instances on workers for non-critical batch (50% compute savings; we accept occasional preemption). Autoscaling pools per environment. War story: small-file problem on IoT Bronze made a 47-min query — a `OPTIMIZE ... ZORDER BY (machine_id, event_ts)` on the Bronze stream sink got it to 22 sec. Skewed joins on `supplier_id` (one supplier, ~40% of rows) — salting on `supplier_id` × 8 took a 90-min Gold build to 11 min.
+### 4.4 SCD2 — two implementations
 
-### 6.3 Storage (Lakehouse on ADLS Gen2)
+Both are source-agnostic (they don't depend on source-side CDC), and both can replay from Bronze.
 
-ADLS Gen2 with hierarchical namespace, CMK from Key Vault, lifecycle policies (Bronze: Hot 30 d → Cool 90 d → Archive 7 y for AS9100; Silver: Hot 90 d → Cool 1 y; Gold: Hot indefinitely). **Bronze** is partitioned by `source_system / ingest_date` for time-travel re-extracts. **Silver and Gold** are Delta tables under Unity Catalog.
+| Implementation | Where | When to use |
+| -- | -- | -- |
+| `dlt.apply_changes` | DLT pipeline | Default for new work in DLT — replay-safe, lineage automatic |
+| Hash-based merge (`scd_helpers.merge_scd2`) | `poc/databricks/lib/scd_helpers.py` | Inside imperative notebooks. SHA-256 over a sorted projection of attributes; expire-and-insert on hash mismatch |
 
-**Why Delta over Iceberg or Hudi?** Delta wins on three axes for this stack: native Databricks integration (no shim, no surprises), Unity Catalog support (Iceberg has it now but with quirks), and Synapse Serverless reads Delta natively without us managing a metastore. Iceberg's hidden partitioning is technically nicer, and at 10× scale on a Trino-led stack I'd reconsider. Hudi was eliminated early — its merge-on-read is genuinely useful but ecosystem maturity and Azure tooling lag.
+## 5. Storage architecture
 
-**Data residency.** All ITAR-adjacent components (defense-sector parts) are pinned to **Central India** region. No paired-region replication for those; DR is in-region snapshot + manual failover. Civilian components have geo-redundant storage to South India. This is enforced by Azure Policy on the resource group, not just intent.
+**Lakehouse on ADLS Gen2 with Delta Lake.** Three layers:
 
-### 6.4 Serving (Synapse + Power BI)
+- **Bronze** — raw and immutable, partitioned by `source_system / ingest_date`. Partitioned for efficient time-travel re-extracts when a transformation bug needs replay. Lifecycle: Hot 30d → Cool 90d → Archive (long-tail retention for compliance use cases).
+- **Silver** — conformed, deduped, SCD2-keyed Delta tables. ACID concurrent writes, time travel for audit replay, schema evolution.
+- **Gold** — business facts and dimensions. Read by Synapse Serverless directly; Synapse Dedicated load is via PolyBase staging.
 
-**Synapse Serverless** for ad-hoc SQL on Gold Delta — no movement, pay per TB scanned, perfect for the 2 analysts and ad-hoc engineering queries.
+**Why Delta Lake over Iceberg or Hudi:**
 
-**Synapse Dedicated** (DW400c → DW1000c at peak) for the executive Power BI dashboards: 50+ concurrent users, predictable workload, materialised distributions on supplier_id. Pause schedule (off Sat-Sun, 22:00-06:00 weekdays). I went back and forth on Snowflake-on-Azure here; ruled it out for two reasons: ADF native integration is better with Synapse, and Reserved Capacity on Dedicated comes out 37% cheaper than Snowflake at this concurrency profile.
+- Native Databricks integration, no shim.
+- Unity Catalog support is first-class.
+- Synapse Serverless reads Delta natively — no external metastore.
+- Open format — can move to Iceberg later if a Trino-led stack emerges.
 
-### 6.5 AI/ML readiness
+At 10× this scale on a multi-engine stack, I'd reconsider — Iceberg's hidden partitioning is technically nicer. For this PoC and team velocity, Delta is the right call.
 
-Two-tier feature store. **Offline** is just Gold Delta tables with time travel — point-in-time correctness for training sets falls out of `VERSION AS OF` for free. **Online** is Cosmos DB (sub-100 ms) for inference. Features are versioned and lineaged in Unity Catalog. ML scoring runs as Databricks jobs orchestrated by ADF; predictions write back to a Gold table so they join with operational data. Model performance lives in the same audit table the rest of the platform uses — no separate "ML observability" silo.
+## 6. Cloud-native services & scalability
 
-ML use cases targeted: predictive maintenance on CNC vibration (48-hr lead time on bearing failures, validated against historical maintenance logs); supplier risk score (OTD + quality + financial signals); multivariate quality anomaly; demand forecasting.
+Every component on the data plane is a *managed* service. No self-hosted Kafka, no self-hosted Spark, no self-hosted SQL. Capacity is a config slider.
 
-### 6.6 Governance, security, compliance
+| Layer | Service | Scale handle | Reason |
+| -- | -- | -- | -- |
+| Streaming ingest | Event Hubs (Kafka API) | Partition count + Throughput Units | Managed, auto-inflate available |
+| Batch ingest | Auto Loader (ADF or Databricks Workflows for orchestration) | `ForEach` parallelism + per-file streaming | SHIR available for on-prem connectivity |
+| Compute | Databricks (Photon + AQE) | Autoscaling pools, spot workers for non-critical | Photon ≈ 2-3× efficiency; spot saves ~50% on batch |
+| Storage | ADLS Gen2 + Delta | Linear; lifecycle for cost | Hierarchical NS gives directory-level ACLs |
+| Serving (warehouse) | Synapse Dedicated | DWU scale-up; pause schedule | Workload management groups for concurrency |
+| Serving (ad-hoc) | Synapse Serverless | Per-query, pay-per-TB | Displaces ad-hoc that would otherwise hit Dedicated |
+| Online ML | Cosmos DB (referenced) | Autoscale RU/s | Sub-100 ms reads at any scale |
 
-Unity Catalog for ACLs at `catalog.schema.table` granularity (and column-level masks for finance fields). Microsoft Purview for end-to-end lineage and the AS9100 evidence pack. Key Vault with CMK on ADLS, Synapse, Databricks. **Managed identities** on all service-to-service auth — zero service principals in production. Private Endpoints on every data-plane service; the only public endpoints are Power BI service and the ADF authoring portal. Defender for Cloud for posture.
+Beyond elasticity, "cloud-native" here also means: a single AAD identity plane (so RLS, UC ACLs, and OIDC federation bind to the same group), and a single observability plane (Azure Monitor + Log Analytics) so cross-service incidents trace cleanly.
 
-**Row-level security** in Synapse: a plant engineer in Hyderabad-1 sees only their plant; a supply chain analyst sees all. The predicate function joins on the user's AAD group → plant mapping table.
+## 7. Data quality, governance & security
 
-### 6.7 CI/CD & DevOps
+**Data quality** — three severity tiers used consistently:
 
-Terraform for ADLS, Databricks workspace, Synapse pools, networking (because state-managed IaC scales better than Bicep for foundation). Bicep for ADF pipelines (it's the native deployment format and round-trips cleanly with the ADF authoring UI). Databricks Asset Bundles for notebook + job promotion. Azure DevOps with feature → develop → uat → prod, YAML pipelines, pytest + chispa for unit tests, integration tests in dev workspace before UAT. Branch protection on `main`; UAT promotion requires reconciliation green.
+- `BLOCK` — pipeline halts. Used for primary-key NULL checks. In DLT this is `expect_or_fail`.
+- `QUARANTINE` — row diverted to a quarantine table; pipeline continues. In DLT this is `expect_or_drop`. Useful for "this row is suspicious but we don't want to halt the world".
+- `WARN` — metric only. In DLT this is `expect`. Used for known-noisy checks.
 
-## 7. Key Design Decisions & Trade-offs
+The DLT pipeline shows all three in action.
 
-| Decision | Options considered | Choice | Rationale | What I'd do at 10× scale |
-| --- | --- | --- | --- | --- |
-| Migration approach | Big-bang vs lift-and-shift vs Strangler Fig | **Strangler Fig** | Aerospace tolerates zero data loss; parallel-run + reconciliation is the only way to *prove* parity | Same approach; add a contract-test layer per source |
-| Lakehouse format | Delta vs Iceberg vs Hudi | **Delta** | Native Databricks + UC + Synapse Serverless; no shim | Iceberg if compute moves to Trino; revisit at 50 TB/day |
-| Compute | Databricks vs Synapse Spark | **Databricks** | Photon, DLT, MLflow, UC; team velocity | Same; multi-workspace per domain at 10× |
-| Orchestrator | ADF vs Airflow vs Synapse Pipelines | **ADF** | SHIR for on-prem, SAP CDC connector, team fluency | Add Airflow only for ML DAGs if ADF cron limits hit |
-| Serving DW | Synapse Dedicated vs Snowflake | **Synapse Dedicated** | 37% cheaper at this concurrency, native ADF | Re-evaluate Snowflake at multi-region serving |
-| Streaming bus | Event Hubs vs Confluent Kafka | **Event Hubs (Kafka API)** | Managed, native Azure auth, no Confluent license | Confluent at 100 K events/sec for Schema Registry & ksqlDB |
-| SCD pattern | Source CDC vs hash-based SCD2 | **Hash-based SCD2** | Source-agnostic; replay from Bronze | Same; add CDC as fast-path for high-volume dims |
-| IaC | Bicep only vs Terraform only vs split | **Terraform (foundation) + Bicep (ADF)** | Best of both: state-managed infra + native ADF round-trip | Same; consider Pulumi for typed pipeline-as-code |
+**Governance:**
 
-## 8. Data Quality, Compliance & AS9100
+- **Unity Catalog** for fine-grained access (`catalog.schema.table` ACLs + column-level masks for sensitive fields).
+- **Microsoft Purview** for lineage and a business glossary. Lineage scans every 6 hours. Pattern referenced in design; scan configuration not in IaC for this PoC.
 
-**Three-tier severity** on every DQ rule: **BLOCK** halts the pipeline (e.g. NULL in `production_order_id`); **QUARANTINE** writes the row to a `_quarantine` Delta table for triage but lets the run continue; **WARN** emits a metric only. Rules are config-driven (Azure SQL `dq_rules` table; see `poc/config/dq_rules_seed.sql`) and executed inline by DLT `EXPECT` and a custom PySpark runner for non-DLT jobs. Cross-table reconciliation (e.g. order-line counts between SAP and MES) and 3-sigma row-count anomaly detection run nightly and post to the audit table.
+**Security:**
 
-**AS9100.** End-to-end lineage from Power BI tile → Gold table → Silver table → Bronze raw row → source system, surfaced in Purview. The audit pack that used to take 6 weeks is now a Purview export filtered by date range and material code; the team prepared for the FY26 audit in 4 days.
+- **Azure Key Vault** with customer-managed keys for ADLS encryption.
+- **Managed identities** for service-to-service auth — no service principals in the Terraform.
+- **Private Endpoints** on every data-plane service in production (skeleton in `main.tf`; full networking module deferred for time).
+- **Microsoft Defender for Cloud** for posture management.
+- **Row-level security** in Synapse for tenant scoping (e.g. plant engineers see only their plant).
 
-**DGCA airworthiness** requires 7-year retention on production-relevant data — handled by ADLS lifecycle on Bronze (Hot → Cool → Archive at 90 d, Archive priced at ~₹0.18/GB/month). **ITAR-adjacent** components are tagged at ingestion and pinned to Central India by Azure Policy.
+## 8. CI/CD, monitoring & cost
 
-## 9. Operational Considerations
+### 8.1 CI/CD
 
-**Monitoring.** Azure Monitor + Log Analytics for infra; a custom `pipeline_run` Delta table for application-level audit (see `pipeline_run.py`). A Power BI dashboard on the audit table tracks SLA, MTTR, DQ pass rate, cost trend. Alerts route to Teams (P3/P4) or PagerDuty (P1/P2) via Action Groups.
+GitHub Actions workflow at `.github/workflows/ci.yml` runs on PR and push to `dev`. What it does today (matches the file):
 
-**SLOs.** Gold freshness 99.5% (≤ 21 minutes' staleness against the SLA per fact). Streaming ingestion 99.9% durability (Event Hubs). Pipeline success 99% per wave-month.
+- Lint Python — `ruff check`, `ruff format --check`, `mypy --strict` on the production library.
+- Unit tests — `pytest` + `chispa`, coverage gate ≥ 80% on `poc/databricks/lib/`.
+- IaC validation — `terraform fmt` + `terraform validate`.
+- Security scan — `gitleaks` on the full diff.
 
-**DR.** RPO 15 min for Gold (Delta change feed shipped to paired region for non-ITAR). RTO 4 hours including Synapse Dedicated restore. Quarterly game-days. ITAR-adjacent: in-region only with daily ZRS-backed snapshot; RTO 8 hours, business-accepted.
+What I'd add for production but didn't build for this take-home:
 
-**Cost optimisation, levers in priority order:**
-1. ADLS lifecycle (Hot → Cool → Archive on Bronze): **~60%** Bronze storage savings.
-2. Reserved Capacity on Synapse Dedicated for the predictable BI workload: **37%**.
-3. Synapse Dedicated pause schedule (nights + weekends): additional **30–40%** on serving.
-4. Databricks Photon: **2-3×** compute efficiency (effectively a discount on compute).
-5. Spot instances on Databricks workers for non-critical batch: **50%** compute saving on those jobs.
-6. Synapse Serverless for ad-hoc (pay per TB): displaces ~70% of ad-hoc that used to hit Dedicated.
+- CD workflows per environment (Databricks bundle deploy, Synapse DDL apply, Terraform apply).
+- OIDC federation to Azure — no static client secrets in repo or org settings.
+- Reviewer-protected GitHub Environments for `dev` / `test` / `prod` with branch-protection rules.
+- Heavier IaC scanning (`tflint`, `checkov`, `tfsec`) and `actions/dependency-review` on PRs.
+- `yamllint` and `sqlfluff` on the YAML and SQL.
 
-Net: **41%** Synapse cost reduction, **27%** overall platform vs legacy, ₹40 L/year of Informatica saved.
+The CI workflow is the meaningful artefact for a 3-day PoC; the CD shape is described above instead of all written.
 
-## 10. PoC Walkthrough (`poc/`)
+### 8.2 Monitoring
 
-What's *built and runnable*:
-- `01_bronze_to_silver_production_order.py`: reads synthetic SAP JSON from Bronze, flattens nested structure with explicit schema, normalises plant-local timestamps to UTC, computes SHA-256 row hash, writes to Silver Delta.
-- `02_scd2_dim_material.py`: hash-based SCD2 onto `dim_material` using `scd_helpers.merge_scd2`.
-- `03_dlt_silver_to_gold_supplier_otd.py`: DLT pipeline with three severity tiers of `EXPECT`.
-- `04_streaming_cnc_telemetry.py`: Structured Streaming from Event Hubs (Kafka API), 10-min watermark, RocksDB state, `foreachBatch` + idempotent MERGE to Silver, tiered SLA pattern.
-- `05_dq_runner.py`: config-driven custom DQ runner.
-- `pipeline_run.py`: context manager — start audit row, acquire pipeline lock, fetch/advance watermark, write outcome.
-- `master_orchestrator_pipeline.json`: ADF parent pipeline (Lookup → ForEach → Switch → child pipelines).
-- `reconciliation.py`: parallel-run reconciliation framework.
-- Synapse DDL + 4 analytics queries, Terraform skeleton, Bicep ADF, pytest unit tests.
+- **Azure Monitor + Log Analytics** for service-level metrics and alerts.
+- A custom `audit.pipeline_run` Delta table written by the `PipelineRun` chassis for application-level audit (run_id, status, watermark, metrics_json). This is what drives the SLO dashboards and what an auditor would query for the change record.
+- Action Groups route alerts to Teams (low severity) or PagerDuty (high severity).
 
-What's *mocked*:
-- Source connectors are pointed at synthetic JSON/CSV in `sample_data/` rather than real on-prem SAP. SHIR provisioning is described in the Terraform comments, not enacted.
-- Event Hubs is described in code; the streaming notebook reads from a `cloudFiles` path in `sample_data/cnc_telemetry_events.json` for local-runnable testing.
-- Cosmos DB online feature store is referenced; not provisioned.
-- Purview wiring is described (lineage scans every 6 h); not configured in this skeleton.
+### 8.3 Cost optimisation
 
-The PoC runs on Databricks Community Edition with the sample data; instructions in `poc/README.md`.
+In priority order of impact:
 
-## 11. Future Evolution Roadmap
+1. **ADLS lifecycle** (Hot → Cool → Archive on Bronze) — significant storage savings on the long tail.
+2. **Synapse Dedicated pause schedule** — pause overnight and weekends.
+3. **Databricks Photon** — ~2-3× compute efficiency; effectively a discount.
+4. **Spot workers** on non-critical batch — ~50% savings on those jobs (we accept occasional preemption).
+5. **Synapse Serverless** for ad-hoc — pay per TB scanned, displaces a class of workloads that would otherwise sit on Dedicated.
 
-- **+6 months:** evaluate **Microsoft Fabric** as a unified surface — OneLake on top of the same ADLS Gen2 storage, no migration. Decision gate: does Fabric Direct Lake mode meet our Power BI concurrency at lower cost than Synapse Dedicated?
-- **+12 months:** scale predictive-maintenance ML to all 14 plants via Azure ML + the online feature store. Target: 48-hr-ahead bearing-failure prediction at every CNC, integrated into the maintenance work-order system.
-- **+12 months:** GenAI on Azure OpenAI for two narrow use cases: supplier contract analysis (extract clauses, flag deviations) and AS9100 audit document summarisation. Both use Gold Delta + Purview lineage as grounding.
-- **+18 months:** **data mesh** per business domain — Manufacturing, Supply Chain, Quality, MRO each own their Gold mart with a domain data-product team. Unity Catalog gives us the shared catalog without new infra.
-- **+24 months:** multi-country lakehouse federation as Chandan opens US/EU operations. Per-region Unity Catalog metastore, federated query via Delta Sharing, no data movement across borders.
+## 9. Trade-offs
 
-## 12. Conclusion
+| Decision | Options considered | Choice | Rationale | At 10× this scale |
+| -- | -- | -- | -- | -- |
+| Lakehouse format | Delta vs Iceberg vs Hudi | **Delta** | Native Databricks + UC + Synapse Serverless reads it directly | Iceberg if compute moves to Trino |
+| Compute | Databricks vs Synapse Spark | **Databricks** | Photon, DLT, MLflow, UC; team velocity | Same; multi-workspace per domain |
+| Orchestrator | ADF vs Airflow vs Synapse Pipelines | **ADF** | SAP CDC, SHIR for on-prem | Airflow only for ML DAGs if ADF cron limits hit |
+| Serving DW | Synapse Dedicated vs Snowflake-on-Azure | **Synapse Dedicated** | Reserved Capacity is cheaper at this concurrency; ADF native | Re-evaluate Snowflake at multi-region serving |
+| Streaming bus | Event Hubs vs Confluent Kafka | **Event Hubs** | Managed, AAD-native, no extra vendor | Confluent at >100K eps for Schema Registry |
+| Dual processing pattern | DLT only vs imperative only vs both | **Both, deliberately** | Shows pattern-choice judgment | Probably consolidate to DLT in production |
 
-The Chandan platform is not a greenfield architecture — it is a *legacy modernisation* that has to keep an aerospace supply chain running while the spine is replaced. The choices in this document are the ones I would defend in an AS9100 audit and in a Boeing supplier review. They prioritise **proven parity** (Strangler Fig with reconciliation), **business continuity** (sub-4-hour cumulative downtime over 18 months), and **measurable outcome** (6 hr → 38 min batch, 6 weeks → 4 days audit, 41% Synapse savings, ₹40 L/year of Informatica gone). The platform is set up so that the next problem the business asks us to solve — predictive maintenance, GenAI on contracts, US/EU expansion — does not require another rebuild.
+## 10. Future evolution
+
+- **+6 months** — Evaluate Microsoft Fabric / OneLake. Same ADLS storage, no migration. Decision gate is whether Direct Lake mode meets concurrency at lower cost than Synapse Dedicated.
+- **+12 months** — Predictive maintenance ML in production via Azure ML + the online feature store. Add a model registry and serving endpoints.
+- **+12 months** — GenAI on Azure OpenAI for two narrow uses: contract analysis and audit-document summarisation. Both grounded on Gold Delta + Purview lineage as the source of truth.
+- **+18 months** — Domain-led data ownership (data mesh) once the platform is stable. Unity Catalog already supports this without new infra.
+- **+24 months** — Multi-region federation if the business expands geographically. Per-region UC metastore + Delta Sharing across regions.
+
+## 11. Honest scope of this PoC
+
+What's **working code** in this repo (read it, run it):
+
+- Architecture diagram (`docs/01_*`).
+- This design doc.
+- The DLT pipeline (`poc/databricks/pipelines/unified_medallion_dlt.py`).
+- Three imperative notebooks (Bronze→Silver SAP, SCD2, streaming CNC).
+- Reusable library (`PipelineRun`, `scd_helpers`, `reconciliation`, `format_readers`).
+- Terraform skeleton (`main.tf`) — RG, KV, ADLS, Databricks workspace, Log Analytics. Networking + Synapse + Cosmos are deferred.
+- Synapse DDL for two facts (production order, supplier OTD) + two analytics queries.
+- Pytest unit tests with coverage gate.
+- GitHub Actions CI workflow.
+
+What's **described, not provisioned**:
+
+- Cosmos DB online feature store.
+- Full networking (VNet, subnets, Private Endpoints).
+- Synapse workspace + Dedicated pool — DDL is written; no pool in the take-home env.
+- Microsoft Purview scan configuration.
+- The CD half of CI/CD (ADF push, Databricks bundle deploy, Synapse DDL apply per env).
+
+What I'd build next (with rough effort) is in `TODO.md`. The most important item there: actually running the streaming notebook against a real Event Hubs at the target throughput, rather than extrapolating from a smaller test.

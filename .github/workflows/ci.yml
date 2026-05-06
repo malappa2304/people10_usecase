@@ -1,114 +1,73 @@
 ###############################################################################
-# CI — runs on every PR and on push to develop/uat/main.
+# CI — runs on every PR and push to dev.
 #
-# Required checks (configured in branch protection):
-#   - lint-python, lint-yaml, lint-sql
-#   - python-tests (with coverage gate >= 80%)
-#   - terraform-validate
-#   - bicep-validate
-#   - adf-json-schema
-#   - security-scan
-#
-# Each job runs in parallel. `summary` job collects results into the PR.
+# Required checks: lint-python, python-tests (coverage gate >= 80%),
+# terraform-validate, security-scan. Kept deliberately lean for a 3-day PoC;
+# production CI/CD would also include CD workflows, OIDC federation, and
+# environment promotion. The shape is described in docs/02_design_document.md.
 ###############################################################################
 
 name: CI
 
 on:
   pull_request:
-    branches: [develop, uat, main]
+    branches: [dev]
   push:
-    branches: [develop, uat, main]
+    branches: [dev]
 
-# PR cancels in-progress CI on the same ref; main-branch CI does not cancel.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  pull-requests: write   # for PR comments (coverage, what-if)
-  security-events: write # for SARIF upload
+  pull-requests: write
+  security-events: write
 
 jobs:
 
-  # ---------------------------------------------------------------------------
   lint-python:
     name: Lint · Python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: |
-            poc/databricks/lib/**/*.py
-            poc/tests/**/*.py
-
       - name: Install linters
         run: pip install ruff==0.4.* mypy==1.10.*
-
       - name: ruff check
         run: ruff check poc/
-
       - name: ruff format check
         run: ruff format --check poc/
-
       - name: mypy --strict (production lib only)
         run: mypy --strict --ignore-missing-imports poc/databricks/lib/
 
-  # ---------------------------------------------------------------------------
-  lint-yaml:
-    name: Lint · YAML
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: pip install yamllint==1.35.*
-      - run: yamllint -s -c .github/yamllint.yml .
-
-  # ---------------------------------------------------------------------------
-  lint-sql:
-    name: Lint · Synapse SQL
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: pip install "sqlfluff==3.0.*"
-      - name: sqlfluff lint
-        run: sqlfluff lint --dialect tsql poc/synapse/
-
-  # ---------------------------------------------------------------------------
   python-tests:
     name: Tests · pytest + chispa (coverage ≥ 80%)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-
       - name: Install test deps
         run: |
           pip install \
             "pyspark==3.5.*" "delta-spark==3.2.*" \
             "pytest==8.*" "pytest-cov==5.*" "chispa==0.10.*"
-
-      - name: Run pytest with coverage gate
+      - name: Run pytest
         run: |
           PYTHONPATH=poc pytest poc/tests/ -v \
             --cov=poc/databricks/lib \
-            --cov-report=xml \
-            --cov-report=term \
+            --cov-report=xml --cov-report=term \
             --cov-fail-under=80
-
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,155 +76,32 @@ jobs:
           path: coverage.xml
           retention-days: 14
 
-  # ---------------------------------------------------------------------------
   terraform-validate:
-    name: IaC · Terraform validate + scan
+    name: IaC · Terraform validate
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: poc/infrastructure/terraform
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.8.5
-
       - name: terraform fmt
         run: terraform fmt -check -recursive
-
-      - name: terraform init (no backend — validate only)
+      - name: terraform init (no backend)
         run: terraform init -backend=false
-
       - name: terraform validate
         run: terraform validate -no-color
 
-      - uses: terraform-linters/setup-tflint@v4
-        with:
-          tflint_version: latest
-      - run: tflint --init && tflint --recursive
-
-      - name: Checkov
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: poc/infrastructure/terraform
-          framework: terraform
-          soft_fail: false
-          output_format: sarif
-          output_file_path: checkov.sarif
-          quiet: true
-
-      - name: Upload Checkov SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: poc/infrastructure/terraform/checkov.sarif
-          category: checkov
-
-      - name: tfsec
-        uses: aquasecurity/tfsec-sarif-action@v0.1.4
-        with:
-          sarif_file: tfsec.sarif
-
-      - name: Upload tfsec SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: poc/infrastructure/terraform/tfsec.sarif
-          category: tfsec
-
-  # ---------------------------------------------------------------------------
-  bicep-validate:
-    name: IaC · Bicep build + lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-bicep@v2
-
-      - name: Bicep build (compile to ARM)
-        run: bicep build poc/infrastructure/bicep/adf_pipeline.bicep --outfile /tmp/adf_pipeline.json
-
-      - name: Bicep lint
-        run: bicep lint poc/infrastructure/bicep/adf_pipeline.bicep
-
-      - name: Upload compiled ARM
-        uses: actions/upload-artifact@v4
-        with:
-          name: adf-arm-template
-          path: /tmp/adf_pipeline.json
-          retention-days: 14
-
-  # ---------------------------------------------------------------------------
-  adf-json-schema:
-    name: ADF · JSON schema validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install ajv-cli
-        run: npm install -g ajv-cli@5
-
-      - name: Validate every ADF JSON parses cleanly
-        run: |
-          set -euo pipefail
-          shopt -s globstar
-          for f in poc/adf/**/*.json; do
-            echo "::group::$f"
-            python -c "import json,sys; json.load(open(sys.argv[1]))" "$f"
-            echo "::endgroup::"
-          done
-
-  # ---------------------------------------------------------------------------
   security-scan:
-    name: Security · gitleaks + dependency review
+    name: Security · gitleaks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # gitleaks needs full history
-
+          fetch-depth: 0
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true
-
-      - name: Dependency Review
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          deny-licenses: GPL-3.0, AGPL-3.0
-
-  # ---------------------------------------------------------------------------
-  summary:
-    name: CI summary
-    if: always()
-    needs:
-      - lint-python
-      - lint-yaml
-      - lint-sql
-      - python-tests
-      - terraform-validate
-      - bicep-validate
-      - adf-json-schema
-      - security-scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Aggregate
-        run: |
-          echo "## CI summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Check                | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| -------------------- | ------ |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| lint-python          | ${{ needs.lint-python.result }} |"          >> "$GITHUB_STEP_SUMMARY"
-          echo "| lint-yaml            | ${{ needs.lint-yaml.result }} |"            >> "$GITHUB_STEP_SUMMARY"
-          echo "| lint-sql             | ${{ needs.lint-sql.result }} |"             >> "$GITHUB_STEP_SUMMARY"
-          echo "| python-tests         | ${{ needs.python-tests.result }} |"         >> "$GITHUB_STEP_SUMMARY"
-          echo "| terraform-validate   | ${{ needs.terraform-validate.result }} |"   >> "$GITHUB_STEP_SUMMARY"
-          echo "| bicep-validate       | ${{ needs.bicep-validate.result }} |"       >> "$GITHUB_STEP_SUMMARY"
-          echo "| adf-json-schema      | ${{ needs.adf-json-schema.result }} |"      >> "$GITHUB_STEP_SUMMARY"
-          echo "| security-scan        | ${{ needs.security-scan.result }} |"        >> "$GITHUB_STEP_SUMMARY"

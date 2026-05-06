@@ -1,10 +1,10 @@
 # =============================================================================
-# Databricks Asset Bundle — declarative deploy of notebooks + jobs across
-# dev / uat / prod targets. Driven by .github/workflows/cd-databricks.yml.
+# Databricks Asset Bundle — declarative deploy of notebooks + DLT pipeline
+# across dev / test / prod targets.
 # =============================================================================
 
 bundle:
-  name: chandan-aerospace
+  name: people10-poc
 
 include:
   - poc/databricks/notebooks/*.py
@@ -15,6 +15,12 @@ variables:
   cluster_node_type:
     description: Node type for batch jobs.
     default: Standard_DS4_v2
+  eh_bootstrap:
+    description: Event Hubs Kafka bootstrap servers (env-specific).
+    default: chandan-eventhubs-dev.servicebus.windows.net:9093
+  lake_account:
+    description: ADLS Gen2 storage account name (env-specific).
+    default: chandanlakedev
 
 # -----------------------------------------------------------------------------
 # Resources
@@ -22,8 +28,8 @@ variables:
 resources:
   jobs:
 
-    # Smoke job — re-runs SCD2 dim_material against a fixture dataset.
-    # Used by cd-databricks.yml as the post-deploy health check.
+    # Smoke job — re-runs SCD2 dim_material against a fixture dataset
+    # as a post-deploy health check.
     scd2_dim_material_smoke:
       name: "[smoke] scd2_dim_material — ${bundle.target}"
       tasks:
@@ -32,7 +38,7 @@ resources:
             notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
             base_parameters:
               run_mode: smoke
-              fixture_path: /Volumes/${var.catalog}/qa/fixtures/dim_material_smoke
+              fixture_path: /Volumes/${var.catalog}/fixtures/dim_material_smoke
           new_cluster:
             spark_version: 14.3.x-photon-scala2.12
             node_type_id: ${var.cluster_node_type}
@@ -44,10 +50,9 @@ resources:
       max_concurrent_runs: 1
       email_notifications:
         on_failure:
-          - data-oncall@chandan.example.com
+          - data-oncall@example.com
 
-    # Daily orchestrator job — kicked off by ADF in production but defined
-    # here so the bundle can deploy/replay on demand.
+    # Daily orchestrator job — Bronze→Silver SAP, then SCD2 dim_material.
     daily_orchestrator:
       name: "Daily orchestrator — ${bundle.target}"
       tasks:
@@ -59,21 +64,18 @@ resources:
             - task_key: bronze_to_silver_po
           notebook_task:
             notebook_path: ./poc/databricks/notebooks/02_scd2_dim_material.py
-        - task_key: dq_runner
-          depends_on:
-            - task_key: scd2_dim_material
-          notebook_task:
-            notebook_path: ./poc/databricks/notebooks/05_dq_runner.py
       schedule:
         quartz_cron_expression: "0 0 21 ? * MON-FRI"   # 02:00 IST = 21:30 UTC
         timezone_id: UTC
-        pause_status: PAUSED                           # ADF triggers it in prod
+        pause_status: PAUSED
 
     # Continuous streaming job — CNC telemetry.
     streaming_cnc_telemetry:
       name: "Streaming · CNC telemetry — ${bundle.target}"
       continuous:
-        pause_status: ${bundle.target == "dev" ? "PAUSED" : "UNPAUSED"}
+        # Paused on dev so the cluster doesn't burn budget during local dev;
+        # unpaused on test/prod via the per-target overrides at the bottom.
+        pause_status: PAUSED
       tasks:
         - task_key: cnc_stream
           notebook_task:
@@ -88,6 +90,30 @@ resources:
             spark_conf:
               spark.sql.streaming.stateStore.providerClass: com.databricks.sql.streaming.state.RocksDBStateStoreProvider
 
+  # ---------------------------------------------------------------------------
+  # DLT pipelines (Lakeflow Declarative)
+  # ---------------------------------------------------------------------------
+  pipelines:
+
+    # Unified medallion — streaming CNC telemetry + batch SAP files in ONE pipeline.
+    # The canonical Databricks pattern for "unify streaming and batch data".
+    unified_medallion:
+      name: "Unified Medallion (streaming + batch DLT) — ${bundle.target}"
+      catalog: ${var.catalog}
+      target: medallion
+      libraries:
+        - notebook:
+            path: ./poc/databricks/pipelines/unified_medallion_dlt.py
+      configuration:
+        pipelines.useDefaultPublishMode: "true"
+        eh_bootstrap:    "${var.eh_bootstrap}"
+        eh_topic:        "cnc-telemetry"
+        sap_bronze_path: "abfss://bronze@${var.lake_account}.dfs.core.windows.net/sap/production_order/"
+        schemas_path:    "abfss://checkpoints@${var.lake_account}.dfs.core.windows.net/dlt/schemas/"
+      development: true     # serverless / fast-iterate on dev; overridden per-target below
+      photon: true
+      channel: PREVIEW
+
 # -----------------------------------------------------------------------------
 # Targets
 # -----------------------------------------------------------------------------
@@ -99,17 +125,19 @@ targets:
     workspace:
       host: https://adb-dev.azuredatabricks.net
     variables:
-      catalog: chandan_dev
+      catalog:      people10_dev
+      eh_bootstrap: people10-eventhubs-dev.servicebus.windows.net:9093
+      lake_account: people10lakedev
 
-  uat:
+  test:
     mode: production
     workspace:
-      host: https://adb-uat.azuredatabricks.net
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/uat
+      host: https://adb-test.azuredatabricks.net
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/test
     variables:
-      catalog: chandan_uat
-    run_as:
-      user_name: svc-databricks-uat@chandan.example.com
+      catalog:      people10_test
+      eh_bootstrap: people10-eventhubs-test.servicebus.windows.net:9093
+      lake_account: people10laketest
 
   prod:
     mode: production
@@ -117,12 +145,7 @@ targets:
       host: https://adb-prod.azuredatabricks.net
       root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
     variables:
-      catalog: chandan_prod
+      catalog:           people10_prod
       cluster_node_type: Standard_DS5_v2
-    run_as:
-      user_name: svc-databricks-prod@chandan.example.com
-    permissions:
-      - level: CAN_VIEW
-        group_name: data-platform-readonly
-      - level: CAN_MANAGE_RUN
-        group_name: data-platform-oncall
+      eh_bootstrap:      people10-eventhubs-prod.servicebus.windows.net:9093
+      lake_account:      people10lakeprod

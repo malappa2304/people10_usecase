@@ -1,100 +1,129 @@
-# Chandan Aerospace — Cloud-Native Enterprise Data Platform on Azure
+# People10 PoC — Cloud-Native Data Platform on Azure
 
-**People10 Solutions Lab — Lead Data Engineer Take-Home Assignment**
-**Domain:** Aerospace Manufacturing & MRO  •  **Cloud:** Azure  •  **Pattern:** ADF + ADLS Gen2 + Databricks + Delta Lake + Synapse
+A 3-day take-home for the People10 Solutions Lab brief. End-to-end design + working prototype on Azure (ADLS Gen2 · Databricks · Delta Lake · Synapse) showing how a modern lakehouse unifies streaming and batch, supports analytics, and prepares data for AI/ML.
+
+— Malappa
 
 ---
 
-## What this repository contains
+## How to read this in 20 minutes
 
-A complete solution design and working PoC for replacing Chandan Aerospace's legacy Informatica + Oracle DW stack with an Azure lakehouse that unifies streaming and batch, breaks operational silos across 14 plants and 200+ suppliers, and prepares the data estate for predictive maintenance and AS9100 audit automation.
+1. **[`docs/01_architecture_diagram.md`](docs/01_architecture_diagram.md)** — one diagram, 1 minute.
+2. **[`docs/02_design_document.md`](docs/02_design_document.md)** — design covering the brief's 7 key areas, ~10 minutes.
+3. **[`poc/databricks/pipelines/unified_medallion_dlt.py`](poc/databricks/pipelines/unified_medallion_dlt.py)** — the central demo, ~5 minutes. One DLT pipeline ingests **streaming** (Event Hubs) **and** **batch** (Auto Loader) into the same medallion. This is the unification claim made literal.
+4. **[`TODO.md`](TODO.md)** — what I'd do next if I had more time, and what I'm uncertain about.
 
-This is a **legacy-modernization** brief, not a greenfield design. Every architectural choice is justified against a 7-phase Strangler Fig migration with parallel-run reconciliation — the differentiator the People10 brief asks for.
+If you only have 5 minutes: read the diagram and the design-doc executive summary.
 
-## Repository structure
+## What the brief asked for, and where it's covered
+
+| Brief — Key Areas to Cover | Where in this repo |
+| -- | -- |
+| Batch & streaming ingestion | Design doc §3 · DLT pipeline `unified_medallion_dlt.py` · Streaming notebook `04_streaming_cnc_telemetry.py` |
+| Data processing & transformation | Design doc §4 · 3 notebooks under `poc/databricks/notebooks/` · Reusable lib in `poc/databricks/lib/` |
+| Storage architecture | Design doc §5 · Terraform `main.tf` · Synapse DDL under `poc/synapse/ddl/` |
+| Cloud-native services & scalability | Design doc §6 |
+| Data quality, governance & security | Design doc §7 · DLT expectations inline in the pipeline |
+| CI/CD, monitoring & cost optimization | Design doc §8 · `.github/workflows/ci.yml` · `Makefile` |
+| Trade-offs & future evolution | Design doc §9 + §10 |
+
+## Repo layout
 
 ```
 people10_usecase/
-├── README.md                        # this file
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── databricks.yml                   # Databricks Asset Bundle (DAB) — driven by CI/CD
+├── README.md                   # this file (single source of truth)
+├── TODO.md                     # what's next + things I'm uncertain about
+├── Makefile                    # make test / lint / smoke / ci-local
+├── databricks.yml              # Databricks Asset Bundle
+├── .env.example                # local dev env-var template
 ├── docs/
-│   ├── 01_architecture_diagram.md   # Mermaid end-to-end diagram
-│   ├── 02_design_document.md        # 4000-word design doc
-│   ├── 03_presentation_deck_outline.md
-│   └── 04_cicd_strategy.md          # CI/CD strategy (Azure best-practice + SDLC)
-├── qa/
-│   ├── test_plan.md                 # master plan
-│   ├── test_cases/                  # 7 suites: functional, integration, perf, security, migration, compliance, DQ
-│   └── qa_pass_report.md            # release-candidate sign-off
-├── .github/
-│   ├── workflows/                   # CI + CD per artefact + drift + release
-│   ├── CODEOWNERS, dependabot.yml, SECURITY.md, ISSUE_TEMPLATE/, pull_request_template.md
-└── poc/
-    ├── README.md                    # how to run the PoC
-    ├── databricks/                  # PySpark notebooks + reusable lib
-    ├── adf/                         # ADF pipelines, linked services, datasets, triggers
-    ├── synapse/                     # DDL + analytics SQL
-    ├── infrastructure/              # Terraform + Bicep
-    ├── tests/                       # pytest + chispa unit tests
-    ├── sample_data/                 # synthetic SAP/MES/IoT samples
-    └── config/                      # source_config, dq_rules, recon tolerance
+│   ├── 01_architecture_diagram.md
+│   ├── 02_design_document.md
+│   └── 03_presentation_deck_outline.md
+├── poc/
+│   ├── databricks/
+│   │   ├── pipelines/          # DLT — unified streaming + batch
+│   │   │   ├── unified_medallion_dlt.py
+│   │   │   └── README.md       # short note: when to use pipelines/ vs notebooks/
+│   │   ├── notebooks/          # imperative PySpark with PipelineRun audit chassis
+│   │   │   ├── 01_bronze_to_silver_production_order.py
+│   │   │   ├── 02_scd2_dim_material.py
+│   │   │   └── 04_streaming_cnc_telemetry.py
+│   │   └── lib/                # reusable: PipelineRun, SCD2, recon, readers
+│   ├── synapse/
+│   │   ├── ddl/                # fact_production_order, fact_supplier_otd
+│   │   └── analytics/          # supplier_otd_trend, top_suppliers_by_plant
+│   ├── infrastructure/terraform/   # one self-contained main.tf
+│   ├── tests/                  # pytest + chispa unit tests
+│   ├── sample_data/            # synthetic JSON / CSV
+│   └── config/                 # source_config seed
+└── .github/workflows/ci.yml    # PR validation
 ```
 
-## How to read this submission
+## Running it locally
 
-1. Start with [`docs/01_architecture_diagram.md`](docs/01_architecture_diagram.md) for the one-page picture.
-2. Read [`docs/02_design_document.md`](docs/02_design_document.md) end-to-end (~25 min) for the migration story, layer-by-layer design, decision trade-offs, and quantified outcomes.
-3. Skim [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md) — Azure-best-practice GitHub Actions + SDLC mapping.
-4. Walk the PoC: [`poc/README.md`](poc/README.md) explains what's built vs mocked and how to run on Databricks Community Edition.
-5. Read [`qa/qa_pass_report.md`](qa/qa_pass_report.md) for the release-candidate QA outcome and sign-off.
-6. [`docs/03_presentation_deck_outline.md`](docs/03_presentation_deck_outline.md) is the 12-slide walkthrough script for the live review.
+### Unit tests + lint
 
-## Headline outcomes (locked metrics referenced throughout)
+```bash
+make test         # pytest + chispa with coverage gate (≥ 80% on poc/databricks/lib)
+make lint         # ruff check + format-check + mypy --strict + sqlfluff
+make ci-local     # everything CI runs, locally
+```
 
-| Metric                                   | Legacy           | Target after migration | Source of saving                                  |
-| ---------------------------------------- | ---------------- | ---------------------- | ------------------------------------------------- |
-| Daily batch window                       | 6 hours          | 38 minutes             | Databricks Photon + Delta + AQE                   |
-| Gold-layer freshness SLA                 | Best-effort      | 99.5%                  | Audit-table SLO tracking + DQ gates               |
-| AS9100 audit prep                        | 6 weeks          | 4 days                 | Unity Catalog + Purview lineage Bronze→Source     |
-| Informatica licenses                     | ₹40 L/year       | ₹0                     | Strangler Fig decommission per wave               |
-| Synapse cost                             | Baseline         | -41%                   | Pause schedule + Reserved Capacity + Serverless   |
-| Overall platform cost                    | Baseline         | -27%                   | Storage tiering + spot workers + Photon           |
-| Migration cumulative downtime (18 mo)    | N/A              | < 4 hours              | Wave-by-wave cutover with parallel-run recon      |
-| Predictive maintenance lead time         | N/A              | 48 hrs ahead of failure| Vibration ML on CNC telemetry, online feature store |
+Or without `make`:
 
-## Anchor scale
+```bash
+pip install "pyspark==3.5.*" "delta-spark==3.2.*" "pytest==8.*" "pytest-cov==5.*" "chispa==0.10.*"
+PYTHONPATH=poc pytest poc/tests/ -v --cov=poc/databricks/lib --cov-fail-under=80
+```
 
-14 plants  •  200+ tier-1/2 suppliers  •  17 sources today, designed for 50+  •  2.4 TB/day raw  •  600 GB curated  •  12 K events/sec peak streaming  •  AS9100 + DGCA + ITAR-adjacent (Central India region)  •  Team: 1 architect + 6 engineers + 2 analysts
+### Notebooks on Databricks Community Edition
 
-## CI/CD and quality posture
+The fastest way to walk the notebook code end-to-end without standing up cloud infra.
 
-This repo is set up to operate the way the production estate would, not as a one-off submission:
+1. Create a free Community Edition workspace at https://community.cloud.databricks.com.
+2. Import this repo as a *Repo* in the workspace.
+3. Upload the three sample-data files to `dbfs:/FileStore/people10/`:
+   - `poc/sample_data/sap_production_orders.json`
+   - `poc/sample_data/supplier_dispatch.csv`
+   - `poc/sample_data/cnc_telemetry_events.json`
+4. In `01_bronze_to_silver_production_order.py` and `04_streaming_cnc_telemetry.py`, change the Bronze path from `abfss://…` to `dbfs:/FileStore/people10/…`.
+5. Bootstrap the audit tables (one-time):
 
-- **GitHub Actions** workflows under [`.github/workflows/`](.github/workflows/) cover CI (lint + tests + IaC scan + security scan), CD per artefact family (Terraform, ADF, Databricks via DAB, Synapse), drift detection, and tag-driven release.
-- **OIDC federation** to Azure — zero static secrets in the repo or org.
-- **Environment promotion** dev → uat → prod with reviewer protection and migration-wave reconciliation gate.
-- **IaC scanners** (`terraform validate`, `tflint`, `checkov`, `tfsec`, `bicep lint` + what-if) wired as required PR checks.
-- **Coverage gate** ≥ 80% on the production library (`poc/databricks/lib/`).
-- **CODEOWNERS** — security review on infra/networking; quality engineering on DQ rules; migration PMO on reconciliation tolerance.
-- See [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md) for the full posture and the SDLC-phase mapping.
+   ```sql
+   CREATE DATABASE IF NOT EXISTS audit;
+   CREATE TABLE IF NOT EXISTS audit.pipeline_run
+       (run_id STRING, pipeline_name STRING, source_system STRING, entity STRING,
+        status STRING, started_at TIMESTAMP, ended_at TIMESTAMP,
+        metrics_json STRING, error_text STRING, host STRING) USING DELTA;
+   CREATE TABLE IF NOT EXISTS audit.pipeline_lock
+       (pipeline_name STRING, run_id STRING, host STRING, acquired_at TIMESTAMP) USING DELTA;
+   CREATE TABLE IF NOT EXISTS audit.pipeline_watermark
+       (source_system STRING, entity STRING, watermark_value STRING, updated_at TIMESTAMP) USING DELTA;
+   ```
 
-## QA outcome (RC1)
+6. Run the notebooks in order: `01` → `02` → `04`. Optionally deploy the DLT pipeline via `databricks bundle deploy --target dev` after pointing `databricks.yml` at your CE workspace.
 
-| Suite                       | Cases | Pass | Fail | Pass % |
-| --------------------------- | ----: | ---: | ---: | -----: |
-| Functional                  | 26    | 26   | 0    | 100%   |
-| Integration                 | 12    | 11   | 1    |  92%   |
-| Performance                 | 12    | 11   | 1    |  92%   |
-| Security                    | 14    | 14   | 0    | 100%   |
-| Migration / reconciliation  | 15    | 14   | 0    |  93%   |
-| Compliance                  | 13    | 13   | 0    | 100%   |
-| DQ severity                 | 12    | 11   | 1    |  92%   |
-| **Total**                   | **94**| **88**| **3**| **94%**|
+## Honest scope (what runs vs what doesn't)
 
-Zero Critical / High failures. **APPROVE for promotion to prod** — full report in [`qa/qa_pass_report.md`](qa/qa_pass_report.md).
+This is what 3 focused days produces. Some things are working code; some are designed-but-not-provisioned. Calling out the line:
 
-## Author's note
+**Working and runnable**
 
-I have written this from the perspective of having actually led the engagement: decisions are calibrated to what I'd defend in a Boeing/Airbus AS9100 audit, not what looks tidy in a slide. Where I've simplified for the take-home, I've called it out (`# MOCK:` comments in code, "what's mocked vs production" section in [`poc/README.md`](poc/README.md)).
+- All 3 notebooks under `poc/databricks/notebooks/` run on Databricks Community Edition with the supplied sample data
+- The DLT pipeline `unified_medallion_dlt.py` is wired into the Databricks Asset Bundle and runs in any Databricks workspace with the bundle deployed
+- `pytest` suite passes with ≥ 80% coverage on `poc/databricks/lib/`
+- CI workflow runs lint + tests + Terraform validate + gitleaks on every PR
+
+**Designed, not provisioned**
+
+- Synapse Dedicated pool — DDL is written, not run end-to-end (no Synapse pool in the take-home env)
+- Cosmos DB online feature store — pattern is in design doc §6, IaC isn't there
+- Microsoft Purview — referenced for lineage; scan config not wired
+- Most Terraform modules — `main.tf` has the foundation; networking + Synapse + monitoring would each be ~50 lines I haven't written
+
+The TODO list in [`TODO.md`](TODO.md) is the honest "what's next" — read it alongside this README.
+
+## Things I'd like to talk about in the review
+
+The most interesting question, in my opinion, is **why I kept *both* a DLT pipeline and imperative PySpark notebooks** when DLT can do most of what the notebooks do. The answer is in design doc §4. I'd genuinely like a second opinion on whether to retire the imperative notebooks in production, or keep both as a deliberate dual-pattern.
