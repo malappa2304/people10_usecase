@@ -158,22 +158,43 @@ The DLT pipeline shows all three in action.
 
 ### 8.1 CI/CD
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs on PR and push to `dev`. What it does today (matches the file):
+Two workflows + repo hygiene files. Production-grade *patterns* sized for a PoC.
 
-- Lint Python — `ruff check`, `ruff format --check`, `mypy --strict` on the production library.
-- Unit tests — `pytest` + `chispa`, coverage gate ≥ 80% on `poc/databricks/lib/`.
-- IaC validation — `terraform fmt` + `terraform validate`.
-- Security scan — `gitleaks` on the full diff.
+**`.github/workflows/ci.yml`** runs on PR and push to `dev`:
 
-What I'd add for production but didn't build for this take-home:
+- **PR title** check — Conventional Commits (`feat:`, `fix:`, `docs:`, …) enforced.
+- **Path filters** — `dorny/paths-filter` skips unrelated jobs when only docs change.
+- **Lint Python** — `ruff check`, `ruff format --check`, `mypy --strict` on `poc/databricks/lib/`.
+- **Unit tests** — `pytest` + `chispa` with a coverage gate ≥ 80% on the lib. Coverage XML uploaded as an artefact.
+- **Python supply-chain audit** — `pip-audit` against the test dep closure (catches CVEs in pinned versions).
+- **IaC validate** — `terraform fmt -check` + `terraform validate`.
+- **Secret scan** — `gitleaks` over the full diff with full git history.
+- **CI summary** — single status table written to `$GITHUB_STEP_SUMMARY` so the PR view shows results without hunting in job logs.
 
-- CD workflows per environment (Databricks bundle deploy, Synapse DDL apply, Terraform apply).
-- OIDC federation to Azure — no static client secrets in repo or org settings.
-- Reviewer-protected GitHub Environments for `dev` / `test` / `prod` with branch-protection rules.
-- Heavier IaC scanning (`tflint`, `checkov`, `tfsec`) and `actions/dependency-review` on PRs.
-- `yamllint` and `sqlfluff` on the YAML and SQL.
+Cross-cutting: top-level `permissions: contents: read` (least-privilege; jobs widen as needed); concurrency cancels in-progress on PRs but never on `dev`; pip cache via `setup-python`; actions pinned to major version (next hardening step is SHA pinning + `step-security/harden-runner` — Dependabot is configured to bump these).
 
-The CI workflow is the meaningful artefact for a 3-day PoC; the CD shape is described above instead of all written.
+**`.github/workflows/cd-databricks.yml`** is a manual-dispatch deploy skeleton showing the production pattern:
+
+- **OIDC federation** to Azure AD — zero static secrets. Federated credential subject is scoped per environment (`repo:malappa2304/people10_usecase:environment:<env>`).
+- **GitHub Environment** carries reviewer protection + scoped variables. Production has `dev` / `test` / `prod` with 0 / 1 / 2 reviewers respectively.
+- **Databricks AAD auth via `az`** — no Databricks PAT in CI.
+- `databricks bundle validate` → `deploy` → smoke run as one deploy unit.
+- `concurrency.cancel-in-progress: false` — never cancel mid-deploy.
+
+**`.github/dependabot.yml`** auto-bumps GitHub Actions and Terraform providers weekly.
+
+**`.github/pull_request_template.md`** mirrors the CI checks as a reviewer's checklist.
+
+**`.pre-commit-config.yaml`** runs the same lint/format/secret-scan locally (ruff, sqlfluff, terraform fmt, gitleaks, file hygiene) so issues are caught before CI.
+
+What I'd expand for production:
+
+- Auto-trigger CD on push to `dev` / `test` / `prod` with environment promotion gates.
+- Three GitHub Environments wired with reviewer chains and wait timers.
+- SHA-pin every action.
+- Heavier IaC scanning (`tflint`, `checkov`, `tfsec`) plus `actions/dependency-review` on PRs.
+- Sibling CD workflows for Synapse DDL apply, Terraform apply, ADF (if used).
+- `step-security/harden-runner` for egress allowlisting.
 
 ### 8.2 Monitoring
 

@@ -1,0 +1,33 @@
+# =============================================================================
+# Dependabot — keeps CI tooling and Terraform providers current.
+# Lean config; weekday-only PRs to avoid weekend noise.
+# =============================================================================
+
+version: 2
+updates:
+
+  # Pin GitHub Actions versions, get auto-bumps as new minor/patch ship.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "ci"
+      include: scope
+
+  # Terraform providers (azurerm, etc.) — only weekly, low volume.
+  - package-ecosystem: terraform
+    directory: /poc/infrastructure/terraform
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 3
+    labels: [dependencies, infra]
+    commit-message:
+      prefix: "infra"

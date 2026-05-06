@@ -1,0 +1,102 @@
+###############################################################################
+# CD · Databricks Asset Bundle deploy — manual-dispatch skeleton.
+#
+# This is the production deploy pattern. For the PoC scope it's
+# manual-dispatch only (won't accidentally deploy on every push). What it
+# demonstrates:
+#
+#   - OIDC federation to Azure (no static client secrets in repo or org)
+#   - GitHub Environment-scoped credentials with reviewer protection
+#   - Databricks AAD token via `az` (no Databricks PAT in CI)
+#   - bundle validate -> deploy -> smoke run as a single deploy unit
+#   - concurrency: never cancel a mid-deploy
+#
+# What production would expand:
+#   - Auto-trigger on push to dev (and equivalents on test/prod branches)
+#   - Three GitHub Environments with reviewer chains (dev/test/prod)
+#   - Pin every action by SHA (currently major version)
+#   - Add post-deploy verification beyond the smoke run
+#   - Add Synapse DDL apply + Terraform apply siblings
+###############################################################################
+
+name: CD · Databricks (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment (PoC supports dev only)
+        type: choice
+        options: [dev]
+        default: dev
+
+# Never cancel a deploy mid-run. Half-applied infra is worse than queued.
+concurrency:
+  group: cd-databricks-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write     # mandatory for OIDC federation to Azure AD
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy bundle to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # GitHub Environment carries the reviewer protection + scoped vars/secrets.
+    # Production would have dev (0 reviewers) / test (1) / prod (2 + wait timer).
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # OIDC federation — the federated credential subject on the
+      # User-Assigned Managed Identity is
+      # `repo:malappa2304/people10_usecase:environment:<env>`. No static
+      # secrets anywhere in this workflow.
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Authenticate Databricks (AAD via `az`)
+        env:
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+        run: |
+          databricks auth login --host "$DATABRICKS_HOST"
+          databricks current-user me
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+        run: databricks bundle validate --target ${{ inputs.environment }}
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+        run: |
+          databricks bundle deploy \
+            --target ${{ inputs.environment }} \
+            --auto-approve
+
+      - name: Smoke run
+        env:
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+        run: |
+          databricks bundle run scd2_dim_material_smoke \
+            --target ${{ inputs.environment }}
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "## Databricks deploy — ${{ inputs.environment }}"
+            echo ""
+            echo "- Bundle target: \`${{ inputs.environment }}\`"
+            echo "- Smoke job: \`scd2_dim_material_smoke\`"
+            echo "- Workspace: ${{ vars.DATABRICKS_HOST }}"
+          } >> "$GITHUB_STEP_SUMMARY"

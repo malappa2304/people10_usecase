@@ -1,0 +1,51 @@
+# =============================================================================
+# .pre-commit-config.yaml — local-first quality gates.
+#
+# Install once:    pip install pre-commit && pre-commit install
+# Run on demand:   pre-commit run --all-files
+#
+# Pre-commit catches issues before they reach CI, which keeps the PR
+# feedback loop tight. Same tools CI uses, so the result agrees.
+# =============================================================================
+
+repos:
+  # ---------- general file hygiene -------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+
+  # ---------- Python: ruff (lint + format) -----------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # ---------- SQL: sqlfluff against Synapse dialect --------------------------
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.2.4
+    hooks:
+      - id: sqlfluff-lint
+        args: [--dialect, tsql]
+        files: ^poc/synapse/.*\.sql$
+
+  # ---------- Terraform: fmt -------------------------------------------------
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.1
+    hooks:
+      - id: terraform_fmt
+
+  # ---------- secrets: gitleaks (mirrors CI) ---------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
