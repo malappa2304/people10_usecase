@@ -47,30 +47,56 @@ Both use the same `@dlt.table` decorator. Auto Loader's incremental file process
 
 ## 4. Data processing & transformation
 
-I deliberately built **two complementary patterns**:
+The PoC uses **two patterns**. Each one suits different work.
 
-**Pattern A — Lakeflow Declarative Pipelines (DLT)** in `poc/databricks/pipelines/unified_medallion_dlt.py`.
+### 4.1 Pattern A — Declarative pipelines (DLT)
 
-- One declarative pipeline ingests both streaming and batch into Bronze, applies expectations inline (BLOCK / QUARANTINE / WARN tiers via `expect_or_fail` / `expect_or_drop` / `expect`), runs SCD2 via `apply_changes`, and produces a Gold materialised view that joins streaming-derived rollups with batch-derived dimensions.
-- Lineage, autoscaling, retries, the event log — all from the framework.
+**File:** `poc/databricks/pipelines/unified_medallion_dlt.py`.
 
-**Pattern B — Imperative PySpark notebooks** in `poc/databricks/notebooks/`.
+One pipeline does the whole flow:
 
-- Wrapped in a `PipelineRun` audit chassis (lock + watermark + structured audit row) for cases where I need explicit run metadata to satisfy compliance audits.
-- Used where I need full PySpark control — the SAP timezone normalisation in `01_bronze_to_silver_production_order.py` is a good example: `posting_date` arrives as a naive timestamp string with a separate `plant_timezone` column, and I need explicit `to_utc_timestamp(col, tz)` conversion that's hard to express declaratively.
+- Ingests **streaming** (Event Hubs) and **batch** (Auto Loader) into Bronze.
+- Applies inline data-quality checks at three severity tiers:
+  - `expect_or_fail` — halt the pipeline.
+  - `expect_or_drop` — quarantine the row, keep going.
+  - `expect` — emit a metric, no other effect.
+- Maintains the SCD2 dimension via `apply_changes`.
+- Produces a Gold materialised view that joins the streaming rollup with the batch dimension.
 
-The decision rule: *can this be expressed as `@dlt.table` + `expect`s + `apply_changes`?* If yes, write it in `pipelines/`. If no, write it in `notebooks/` with `PipelineRun`.
+Why DLT here: lineage, autoscaling, retries, and the event log all come from the framework. Less plumbing to write and maintain.
 
-For a take-home, having both shows the pattern-choice judgment that production teams need. In a real engagement I'd probably consolidate to DLT once the team has internalised the framework — that's an open question for me, called out in `TODO.md`.
+### 4.2 Pattern B — Imperative notebooks (PySpark)
 
-### 4.1 SCD2
+**Files:** `poc/databricks/notebooks/01_*.py`, `02_*.py`, `04_*.py`.
 
-Two implementations available:
+Each notebook is wrapped in a `PipelineRun` audit chassis. That gives me three things on every run:
 
-- **`dlt.apply_changes`** inside the DLT pipeline. Replay-safe, lineage automatic. Use this when the pipeline is in DLT.
-- **Hash-based merge** in `poc/databricks/lib/scd_helpers.py`. SHA-256 over a sorted projection of attributes; expire-and-insert on hash mismatch. Use this for the imperative path.
+- A pipeline lock (no double-runs from ADF retries).
+- A watermark for incremental ingestion.
+- A structured row in `audit.pipeline_run` — what an auditor reads when something goes wrong.
 
-Both are source-agnostic (they don't depend on source-side change tracking) and both can replay from Bronze.
+I use this pattern where DLT can't comfortably express the work. The clearest example is the SAP timezone case in `01_bronze_to_silver_production_order.py`:
+
+- SAP sends `posting_date` as a naive timestamp string (no timezone).
+- A separate `plant_timezone` column says which zone to interpret it in.
+- The code calls `to_utc_timestamp(col, tz)` per row.
+
+Column-driven, source-specific transforms like this are awkward in DLT but natural in plain PySpark.
+
+### 4.3 Which one to use
+
+> **Decision rule.** If the work can be expressed as `@dlt.table` + `expect`s + `apply_changes`, put it in `pipelines/`. Otherwise put it in `notebooks/` with the `PipelineRun` chassis.
+
+For this take-home I deliberately kept both, to show the judgment call. In production I'd probably consolidate to DLT once the team is comfortable with it — that's an open question called out in `TODO.md`.
+
+### 4.4 SCD2 — two implementations
+
+Both are source-agnostic (they don't depend on source-side CDC), and both can replay from Bronze.
+
+| Implementation | Where | When to use |
+| -- | -- | -- |
+| `dlt.apply_changes` | DLT pipeline | Default for new work in DLT — replay-safe, lineage automatic |
+| Hash-based merge (`scd_helpers.merge_scd2`) | `poc/databricks/lib/scd_helpers.py` | Inside imperative notebooks. SHA-256 over a sorted projection of attributes; expire-and-insert on hash mismatch |
 
 ## 5. Storage architecture
 
