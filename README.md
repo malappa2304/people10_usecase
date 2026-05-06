@@ -68,6 +68,20 @@ people10_usecase/
 
 14 plants  •  200+ tier-1/2 suppliers  •  17 sources today, designed for 50+  •  2.4 TB/day raw  •  600 GB curated  •  12 K events/sec peak streaming  •  AS9100 + DGCA + ITAR-adjacent (Central India region)  •  Team: 1 architect + 6 engineers + 2 analysts
 
+## Brief — "Key Areas to Cover" trace
+
+Quick index a reviewer can use to walk the brief's checklist against this repo:
+
+| # | Key area from the brief | Where covered |
+| - | -- | -- |
+| 1 | Batch & streaming ingestion design | Design [§6.1](docs/02_design_document.md) · ADF master + 4 child pipelines [`poc/adf/pipelines/`](poc/adf/pipelines/) · Streaming notebook [`04_streaming_cnc_telemetry.py`](poc/databricks/notebooks/04_streaming_cnc_telemetry.py) · Reader factory [`format_readers.py`](poc/databricks/lib/format_readers.py) · QA TC-IT-001..008, TC-PF-001..003 |
+| 2 | Data processing & transformation strategy | Design [§6.2](docs/02_design_document.md) · 5 notebooks under [`poc/databricks/notebooks/`](poc/databricks/notebooks/) · Reusable lib [`poc/databricks/lib/`](poc/databricks/lib/) — `PipelineRun`, `scd_helpers`, `reconciliation` · QA TC-FN-001..026 |
+| 3 | Storage architecture (lake / lakehouse / warehouse) | Design [§6.3 + §6.4 + §4.1](docs/02_design_document.md) · ADLS Gen2 [`adls.tf`](poc/infrastructure/terraform/adls.tf) · Synapse DDL [`poc/synapse/ddl/`](poc/synapse/ddl/) (HASH/REPLICATE distributions, columnstore, monthly partitioning) |
+| 4 | Cloud-native services & scalability | Design [§4.1](docs/02_design_document.md) consolidating cloud-native services + scalability per layer · QA TC-PF-001..012 (12K eps streaming, 38-min batch, 50+ concurrent BI) |
+| 5 | Data quality, governance & security | Design [§6.6 + §8](docs/02_design_document.md) · DQ runner [`05_dq_runner.py`](poc/databricks/notebooks/05_dq_runner.py) + [`dq_rules_seed.sql`](poc/config/dq_rules_seed.sql) · Security IaC [`networking.tf`](poc/infrastructure/terraform/networking.tf) (PE/NSG) · QA suites [04 security](qa/test_cases/04_security.md), [06 compliance](qa/test_cases/06_compliance.md), [07 DQ severity](qa/test_cases/07_dq_severity.md) |
+| 6 | CI/CD, monitoring & cost optimization | [`docs/04_cicd_strategy.md`](docs/04_cicd_strategy.md) + [`docs/05_promotion_runbook.md`](docs/05_promotion_runbook.md) · 8 workflows under [`.github/workflows/`](.github/workflows/) · Monitoring IaC [`monitoring.tf`](poc/infrastructure/terraform/monitoring.tf) · Cost optimisation §9 (6 quantified levers, -41% Synapse, -27% overall) |
+| 7 | Trade-offs & future evolution | Design [§7](docs/02_design_document.md) decision table (8 decisions, options-considered/chosen/rationale/at-10× scale) · [§11](docs/02_design_document.md) future evolution roadmap (6/12/18/24-month) |
+
 ## CI/CD and quality posture
 
 This repo is set up to operate the way the production estate would, not as a one-off submission:

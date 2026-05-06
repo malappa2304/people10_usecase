@@ -48,6 +48,23 @@ The canonical picture is in `01_architecture_diagram.md`. In words: sources land
 
 The medallion is non-negotiable. **Bronze** is raw and immutable so we can re-derive Silver from source if the transformation logic changes — the AS9100 auditor explicitly asks "show me the source row" and that has to be the *original* row, not a re-extract. **Silver** is conformed, deduped, SCD2-keyed, and Delta-encoded so we get ACID, time travel, and schema evolution. **Gold** is the four conformed facts and their dimensions: `fact_production_order`, `fact_supplier_otd`, `fact_quality_inspection`, `fact_machine_telemetry`, plus `dim_material`, `dim_supplier`, `dim_workcenter`, `dim_aircraft_component`. Streaming and batch land into the *same* Silver and Gold tables — that is what unification means in practice.
 
+### 4.1 Cloud-native posture & scalability per layer
+
+Every component on the data plane is a *managed* Azure service — no self-hosted Kafka, no self-hosted Spark, no self-hosted SQL — so capacity is a slider, not a procurement cycle. The table summarises which Azure service plays each role and how it scales.
+
+| Layer | Cloud-native service | How it scales | What we measured / locked |
+| -- | -- | -- | -- |
+| Ingestion (batch) | Azure Data Factory + SHIR cluster (2-node, on-prem) | ADF parallelism via `ForEach.batchCount` (set to 8) + Copy `parallelCopies` (set to 8) + DIU (32) | 17 sources today, designed for 50+ — new source is config, not code |
+| Ingestion (stream) | Event Hubs (Kafka API) | Partition count (we benchmarked 16/32/64; 32 is the elbow at 12 K eps); auto-inflate TUs | **12 K events/sec sustained 4 h** without driver restart |
+| Processing | Databricks (Photon + AQE) | Autoscaling pools per env; spot workers on non-critical batch (50% compute saving on those jobs); RocksDB state store for streaming | **Batch 6 h → 38 min**; small-file remediation 47 min → 22 sec; supplier_id skew salting 90 min → 11 min |
+| Storage (lakehouse) | ADLS Gen2 with hierarchical namespace + Delta Lake | Linear with data volume; lifecycle Hot → Cool → Archive cuts the long tail | 2.4 TB/day raw, 600 GB curated; Bronze 7-yr retention via lifecycle |
+| Serving (warehouse) | Synapse Dedicated (DW400c → DW1000c at peak) | Vertical scale + workload-management groups; pause schedule for cost | **50+ concurrent BI users, p95 4.1 sec** in QA RC1 |
+| Serving (ad-hoc) | Synapse Serverless | Per-query compute, pay per TB scanned | Displaces ~70% of ad-hoc that used to hit Dedicated |
+| Online ML inference | Cosmos DB (referenced in §6.5; not provisioned in PoC IaC) | Autoscale RU/s; multi-region writes available when we expand | sub-100 ms target |
+| Networking & identity | Private Endpoints + AAD managed identities + Key Vault CMK | Per-environment scoped; OIDC-federated for CI/CD | Zero public IPs on data plane; zero static secrets in CI |
+
+What "cloud-native" buys us beyond elasticity: **(a)** failure domains we don't have to design — Azure ZRS storage and Synapse's own HA absorb most node failures; **(b)** a single identity plane (AAD) so RLS, Unity Catalog ACLs, and OIDC federation all bind to the same group; **(c)** a single observability plane (Azure Monitor + Log Analytics) so cross-service incidents trace cleanly. The *ten-times-this* answer per layer is in the §7 trade-offs table.
+
 ## 5. Migration Strategy — Strangler Fig in Seven Phases
 
 Big-bang migration on a Boeing/Airbus-tier supply-chain estate is malpractice. I chose a Strangler Fig pattern: stand the new platform up alongside Informatica + Oracle DW, route source data into both, and migrate one *business domain* at a time only after a parallel-run reconciliation says we're identical within tolerance.
