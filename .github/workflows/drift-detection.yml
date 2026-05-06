@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: poc/infrastructure/terraform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: azure/login@v2
         with:
