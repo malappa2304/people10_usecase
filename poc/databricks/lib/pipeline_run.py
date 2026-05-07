@@ -38,7 +38,8 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from types import TracebackType
+from typing import Any, Literal, Optional
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -79,7 +80,14 @@ class PipelineRun:
         self._write_start_row()
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> Literal[False]:
+        # Always returns False — never swallows exceptions. ADF needs to see
+        # the failure to mark the activity failed.
         try:
             if exc is None:
                 self._write_end_row(status="SUCCESS")
@@ -92,7 +100,6 @@ class PipelineRun:
                 self._write_end_row(status="FAILED", error=err)
         finally:
             self._release_lock()
-        # Re-raise: ADF needs to see the failure to mark the activity failed.
         return False
 
     # ---- public API used inside the `with` block ----------------------------
