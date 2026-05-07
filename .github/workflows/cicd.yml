@@ -58,7 +58,6 @@ jobs:
     outputs:
       python-changed:    ${{ steps.changes.outputs.python }}
       terraform-changed: ${{ steps.changes.outputs.terraform }}
-      sql-changed:       ${{ steps.changes.outputs.sql }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,8 +73,6 @@ jobs:
               - 'Makefile'
             terraform:
               - 'poc/infrastructure/terraform/**'
-            sql:
-              - 'poc/synapse/**/*.sql'
 
       - uses: actions/setup-python@v5
         with:
@@ -166,9 +163,12 @@ jobs:
         if: needs.validate.outputs.python-changed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: mypy --strict --ignore-missing-imports poc/databricks/lib/
 
-      - name: sqlfluff (Synapse SQL)
-        if: needs.validate.outputs.sql-changed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        run: sqlfluff lint --dialect tsql poc/synapse/
+      # Synapse SQL is intentionally not linted here. The DDL uses
+      # Synapse-specific T-SQL extensions (DISTRIBUTION = HASH, CLUSTERED
+      # COLUMNSTORE INDEX, PARTITION ranges) that the standard sqlfluff
+      # tsql dialect can't parse. Real validation happens when the DDL is
+      # applied against a Synapse pool — not worth adding a workaround for
+      # this PoC.
 
       - name: pytest + chispa (coverage ≥ 80%)
         if: needs.validate.outputs.python-changed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'

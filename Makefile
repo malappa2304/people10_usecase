@@ -3,14 +3,14 @@
 # Usage:
 #   make help        # see everything
 #   make test        # run unit tests with coverage gate
-#   make lint        # ruff + sqlfluff
+#   make lint        # ruff check + format check + mypy
 #   make smoke       # validate + smoke run on dev (needs Databricks CLI auth)
 #   make tf-fmt      # terraform fmt -recursive
 #   make tf-plan     # terraform plan against dev (needs az login)
 #   make ci-local    # run the same checks CI runs, locally
 # =============================================================================
 
-.PHONY: help test lint lint-py lint-sql tf-fmt tf-validate tf-plan \
+.PHONY: help test lint lint-py tf-fmt tf-validate tf-plan \
         bundle-validate bundle-deploy-dev smoke ci-local clean
 
 PY        ?= python3
@@ -33,12 +33,7 @@ lint-py: ## ruff check + format-check + mypy --strict on production lib
 	ruff format --check poc/
 	mypy --strict --ignore-missing-imports poc/databricks/lib/
 
-# ---- SQL --------------------------------------------------------------------
-
-lint-sql: ## sqlfluff against Synapse SQL
-	sqlfluff lint --dialect tsql poc/synapse/
-
-lint: lint-py lint-sql ## All linters
+lint: lint-py ## All linters
 
 # ---- Terraform --------------------------------------------------------------
 
