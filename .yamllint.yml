@@ -1,0 +1,41 @@
+# =============================================================================
+# .yamllint.yml — yamllint config used by both pre-commit and the CI/CD
+# pipeline's validate stage. Single source of truth.
+# =============================================================================
+
+extends: default
+
+rules:
+  # --- Style preferences -----------------------------------------------------
+  # `colons: disable` allows value alignment: e.g.
+  #     eh_bootstrap:    "..."
+  #     lake_account:    "..."
+  # Vertical alignment is a deliberate readability choice across this repo.
+  colons: disable
+
+  # GitHub Actions uses `on:` as a key. yamllint's truthy rule warns on bare
+  # truthy values; turning it off avoids false positives on workflow files.
+  truthy: disable
+
+  # No leading `---` document-start markers in our YAML.
+  document-start: disable
+
+  # Indentation enforced as consistent within a file (some tools emit 2,
+  # some emit 4). Don't fight on indent width.
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent
+
+  # 200 chars is generous but keeps multi-line strings readable on review.
+  line-length:
+    max: 200
+    level: warning
+
+  # Match how Black + ruff format Python comments — single space after #.
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+
+  # CRLF vs LF — let `.gitattributes` and the editor handle this. yamllint
+  # shouldn't fail a Windows-checked-out file when git's autocrlf=true.
+  new-lines: disable

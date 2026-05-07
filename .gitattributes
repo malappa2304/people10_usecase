@@ -1,0 +1,12 @@
+# Force LF line endings for text files. Avoids CRLF surprises on
+# Windows checkouts and keeps CI deterministic.
+* text=auto eol=lf
+
+# Binary types — never modify
+*.pptx binary
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.zip  binary

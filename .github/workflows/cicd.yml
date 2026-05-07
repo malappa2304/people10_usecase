@@ -82,10 +82,11 @@ jobs:
           python-version: '3.11'
 
       - name: Validate YAML files
+        # yamllint config lives in .yamllint.yml at repo root (single source
+        # of truth; pre-commit reads the same file).
         run: |
           pip install --no-cache-dir "yamllint==1.35.*"
-          yamllint -d "{extends: default, rules: {line-length: {max: 200}, truthy: disable, document-start: disable, comments: {min-spaces-from-content: 1}, comments-indentation: disable, indentation: {spaces: consistent}}}" \
-            .github/ databricks.yml .pre-commit-config.yaml
+          yamllint --strict .github/ databricks.yml .pre-commit-config.yaml .yamllint.yml
 
       - name: Validate JSON files
         run: |
