@@ -63,7 +63,7 @@ This is a deliberate choice for the PoC — shows pattern judgment, not just one
 
 - **Lineage** — Unity Catalog + Purview for AS9100-style audit trails
 - **Security** — managed identities, CMK from Key Vault, Private Endpoints, RLS in Synapse
-- **CI/CD** — GitHub Actions with ruff + pytest (coverage gate ≥80%) + terraform validate + checkov + gitleaks
+- **CI/CD** — GitHub Actions with ruff + pytest (coverage reported) + terraform validate + checkov + gitleaks
 - **Cost levers** — ADLS lifecycle, Synapse pause schedule, Photon, spot workers, Serverless for ad-hoc
 
 ## Slide 8 — Trade-offs and what I'd do next

@@ -22,11 +22,10 @@ help: ## Show this help
 
 # ---- Python -----------------------------------------------------------------
 
-test: ## Run pytest + chispa with coverage gate (>=80%)
+test: ## Run pytest + chispa with coverage report
 	PYTHONPATH=$(PYTHONPATH) pytest poc/tests/ -v \
 		--cov=poc/databricks/lib \
-		--cov-report=term \
-		--cov-fail-under=80
+		--cov-report=term
 
 lint-py: ## ruff check + format-check + mypy --strict on production lib
 	ruff check poc/

@@ -22,7 +22,7 @@ e.g.   `feat(databricks): add unified DLT pipeline for streaming + batch`
 ## Verification
 
 - [ ] CI green (lint + tests + tf-validate + secret-scan + pip-audit)
-- [ ] Coverage ≥ 80% on `poc/databricks/lib/` (no regression)
+- [ ] Coverage on `poc/databricks/lib/` not regressed (current: ~87% on `pipeline_run.py`)
 - [ ] Tested locally where applicable: `make ci-local`
 - [ ] No new secrets committed (gitleaks will block; double-checked locally)
 
