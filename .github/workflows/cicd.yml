@@ -80,8 +80,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          # No cache: pip here. yamllint is a tiny install — caching adds
+          # no value and the post-step errors when the cache folder is
+          # empty (which it would be with --no-cache-dir below).
 
       - name: Validate YAML files
         # yamllint config lives in .yamllint.yml at repo root (single source
@@ -210,8 +211,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
+          # No cache: pip — pip-audit alone is small. Cache earns its keep
+          # only on Stage 2 where PySpark + Delta are installed.
 
       - name: Python dependency audit (pip-audit)
         # Audits the same pinned dev-dep set used elsewhere in the pipeline.
