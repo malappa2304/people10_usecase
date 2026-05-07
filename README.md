@@ -1,6 +1,4 @@
-# People10 PoC — Cloud-Native Data Platform on Azure
-
-Hi, I'm Malappa. This is my take-home for the People10 Solutions Lab brief — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
+The People10 Solutions Lab brief — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
 
 The brief is generic ("a modern data platform"), so I picked manufacturing as the use case because it gave me realistic streaming + batch flows to demonstrate. The architecture choices, trade-offs, and trade-off rationale are all mine to defend.
 
@@ -25,9 +23,9 @@ Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed
 3. **[`poc/databricks/pipelines/unified_medallion_dlt.py`](poc/databricks/pipelines/unified_medallion_dlt.py)** — the central demo, ~5 minutes. One DLT pipeline ingests **streaming** (Event Hubs) **and** **batch** (Auto Loader) into the same medallion. This is the unification claim made literal.
 4. **[`TODO.md`](TODO.md)** — what I'd do next if I had more time, and what I'm uncertain about.
 
-## What the brief asked for, and where it's covered
+## WHat is the ask, and where it's covered
 
-| Brief — Key Areas to Cover | Where in this repo |
+| Key Areas to Cover | Where in this repo |
 | -- | -- |
 | Batch & streaming ingestion | Design doc §3 · DLT pipeline `unified_medallion_dlt.py` · Streaming notebook `04_streaming_cnc_telemetry.py` |
 | Data processing & transformation | Design doc §4 · 3 notebooks under `poc/databricks/notebooks/` · Reusable lib in `poc/databricks/lib/` |
