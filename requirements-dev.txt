@@ -1,0 +1,28 @@
+# =============================================================================
+# requirements-dev.txt — pinned dev dependencies for the CI/CD pipeline.
+#
+# Used by:
+#   - .github/workflows/cicd.yml (Stages 1, 2, 3 install from here)
+#   - .pre-commit-config.yaml (consistency between local pre-commit and CI)
+#   - `make ci-local` (local mirror of what CI runs)
+#
+# Pin exactly. Bumps go through Dependabot, reviewed in PRs.
+# =============================================================================
+
+# ---- Python lint / type-check / format -------------------------------------
+ruff==0.6.9
+mypy==1.10.1
+sqlfluff==3.2.5
+
+# ---- YAML lint --------------------------------------------------------------
+yamllint==1.35.1
+
+# ---- Test runtime: PySpark + Delta + chispa ---------------------------------
+pyspark==3.5.3
+delta-spark==3.2.0
+pytest==8.3.3
+pytest-cov==5.0.0
+chispa==0.10.1
+
+# ---- Security ---------------------------------------------------------------
+pip-audit==2.7.3

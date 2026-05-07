@@ -80,12 +80,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Validate YAML files
         # yamllint config lives in .yamllint.yml at repo root (single source
         # of truth; pre-commit reads the same file).
         run: |
-          pip install --no-cache-dir "yamllint==1.35.*"
+          pip install --no-cache-dir "yamllint==$(grep -oP '(?<=^yamllint==).*' requirements-dev.txt)"
           yamllint --strict .github/ databricks.yml .pre-commit-config.yaml .yamllint.yml
 
       - name: Validate JSON files
@@ -142,6 +144,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - uses: actions/setup-java@v4
         if: needs.validate.outputs.python-changed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -150,11 +153,7 @@ jobs:
           java-version: '17'
 
       - name: Install Python tooling
-        run: |
-          pip install --no-cache-dir \
-            "ruff==0.6.*" "mypy==1.10.*" "sqlfluff==3.2.*" \
-            "pyspark==3.5.*" "delta-spark==3.2.*" \
-            "pytest==8.*" "pytest-cov==5.*" "chispa==0.10.*"
+        run: pip install -r requirements-dev.txt
 
       - name: ruff check
         run: ruff check poc/
@@ -211,17 +210,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Python dependency audit (pip-audit)
+        # Audits the same pinned dev-dep set used elsewhere in the pipeline.
         run: |
-          pip install --no-cache-dir "pip-audit==2.7.*"
-          cat <<'EOF' > /tmp/req.txt
-          pyspark==3.5.0
-          delta-spark==3.2.0
-          chispa==0.10.0
-          pytest==8.3.3
-          EOF
-          pip-audit --strict -r /tmp/req.txt
+          pip install --no-cache-dir "pip-audit==$(grep -oP '(?<=^pip-audit==).*' requirements-dev.txt)"
+          pip-audit --strict -r requirements-dev.txt
 
       - name: IaC security scan (checkov)
         if: needs.validate.outputs.terraform-changed == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
