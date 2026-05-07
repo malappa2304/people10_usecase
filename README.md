@@ -29,7 +29,7 @@ Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed
 | Storage architecture | Design doc §5 · Terraform `main.tf` · Synapse DDL under `poc/synapse/ddl/` |
 | Cloud-native services & scalability | Design doc §6 |
 | Data quality, governance & security | Design doc §7 · DLT expectations inline in the pipeline |
-| CI/CD, monitoring & cost optimization | Design doc §8 · `.github/workflows/ci.yml` · `Makefile` |
+| CI/CD, monitoring & cost optimization | Design doc §8 · `.github/workflows/cicd.yml` (5-stage pipeline) · `Makefile` |
 | Trade-offs & future evolution | Design doc §9 + §10 |
 
 ## Repo layout
@@ -61,7 +61,7 @@ people10_usecase/
 │   ├── tests/                  # pytest + chispa unit tests
 │   ├── sample_data/            # synthetic JSON / CSV
 │   └── config/                 # source_config seed
-└── .github/workflows/ci.yml    # PR validation
+└── .github/workflows/cicd.yml  # 5-stage pipeline: validate → lint → security → deploy → clean-up
 ```
 
 ## Running it locally

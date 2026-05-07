@@ -64,7 +64,7 @@ smoke: bundle-validate ## Validate + smoke run of scd2_dim_material on dev
 
 # ---- CI mirror --------------------------------------------------------------
 
-ci-local: lint test tf-validate bundle-validate ## Run the same checks CI runs, locally
+ci-local: lint test tf-validate bundle-validate ## Run the same checks the CI/CD pipeline's validate + lint stages run, locally
 
 # ---- House-keeping ----------------------------------------------------------
 
