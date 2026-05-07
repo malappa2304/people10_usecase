@@ -8,18 +8,14 @@ Run: `pytest poc/tests/test_scd2_logic.py -v`
 from __future__ import annotations
 
 import pytest
-from chispa import assert_df_equality
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
-
 from databricks.lib.scd_helpers import add_row_hash
+from pyspark.sql import SparkSession
 
 
 @pytest.fixture(scope="module")
 def spark() -> SparkSession:
     return (
-        SparkSession.builder
-        .appName("test-scd2")
+        SparkSession.builder.appName("test-scd2")
         .master("local[2]")
         .config("spark.sql.shuffle.partitions", "2")
         .config("spark.jars.packages", "io.delta:delta-spark_2.12:3.2.0")
@@ -51,10 +47,10 @@ def test_hash_changes_on_value_change(spark: SparkSession):
 
 def test_null_values_are_hashed_distinctly_from_empty_string(spark: SparkSession):
     """We hash NULL as a sentinel \\x00 — must not collide with empty string."""
-    df_null  = spark.createDataFrame([("M-001", None, "KG")], "material_id string, desc string, uom string")
-    df_empty = spark.createDataFrame([("M-001", "",   "KG")], "material_id string, desc string, uom string")
+    df_null = spark.createDataFrame([("M-001", None, "KG")], "material_id string, desc string, uom string")
+    df_empty = spark.createDataFrame([("M-001", "", "KG")], "material_id string, desc string, uom string")
 
-    h_null  = add_row_hash(df_null,  ["material_id", "desc", "uom"]).collect()[0]["row_hash"]
+    h_null = add_row_hash(df_null, ["material_id", "desc", "uom"]).collect()[0]["row_hash"]
     h_empty = add_row_hash(df_empty, ["material_id", "desc", "uom"]).collect()[0]["row_hash"]
 
     assert h_null != h_empty

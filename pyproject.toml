@@ -1,0 +1,44 @@
+# =============================================================================
+# pyproject.toml — Python tooling config (ruff).
+#
+# Single source of truth for ruff. CI's ruff check / ruff format --check
+# auto-discover this file; pre-commit reads the same config.
+# =============================================================================
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Sensible default ruleset for a data-platform repo.
+# pyflakes (F) + pycodestyle (E/W) + isort (I) + bugbear (B) + comprehensions (C4)
+select = ["E", "F", "W", "I", "B", "C4"]
+ignore = [
+    "E501",  # line-too-long handled by ruff format; ruff format wraps at 120
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Databricks notebook + DLT pipeline context.
+#
+# `spark`, `dbutils`, `display`, `displayHTML`, `getArgument` etc. are
+# globals injected by the Databricks notebook runtime. Static analysis
+# can't see them, so F821 (undefined-name) fires falsely. The same applies
+# to PySpark module-level decorators in DLT pipelines.
+#
+# `dlt` itself is a real import that's resolved at Databricks runtime.
+"poc/databricks/notebooks/**/*.py"      = ["F821"]
+"poc/databricks/pipelines/**/*.py"      = ["F821"]
+"poc/databricks/lib/format_readers.py"  = ["F821"]   # uses dbutils.secrets
+
+[tool.ruff.format]
+# Match Black-ish defaults; match what CI's `ruff format --check` enforces.
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

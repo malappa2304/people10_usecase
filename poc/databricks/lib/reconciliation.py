@@ -39,8 +39,8 @@ from pyspark.sql import functions as F
 @dataclass
 class ReconConfig:
     pipeline_name: str
-    legacy_table: str       # e.g. oracle_dw.f_supplier_otd
-    new_table: str          # e.g. gold.fact_supplier_otd
+    legacy_table: str  # e.g. oracle_dw.f_supplier_otd
+    new_table: str  # e.g. gold.fact_supplier_otd
     business_keys: list[str]
     value_cols: list[str]
     variance_tolerance_pct: float = 0.5  # default, overridden by config
@@ -69,9 +69,9 @@ def reconcile(spark: SparkSession, cfg: ReconConfig, run_date: str) -> DataFrame
     classified = joined.withColumn(
         "variance_type",
         F.when(F.col("legacy_hash").isNotNull() & F.col("new_hash").isNull(), "MISSING_IN_NEW")
-         .when(F.col("legacy_hash").isNull() & F.col("new_hash").isNotNull(), "MISSING_IN_LEGACY")
-         .when(F.col("legacy_hash") != F.col("new_hash"), "VALUE_MISMATCH")
-         .otherwise(None),
+        .when(F.col("legacy_hash").isNull() & F.col("new_hash").isNotNull(), "MISSING_IN_LEGACY")
+        .when(F.col("legacy_hash") != F.col("new_hash"), "VALUE_MISMATCH")
+        .otherwise(None),
     ).where(F.col("variance_type").isNotNull())
 
     total_rows = joined.count()
@@ -80,33 +80,35 @@ def reconcile(spark: SparkSession, cfg: ReconConfig, run_date: str) -> DataFrame
 
     # The result row the dashboard consumes — one row per (pipeline, day).
     summary = spark.createDataFrame(
-        [(
-            cfg.pipeline_name,
-            run_date,
-            total_rows,
-            variances,
-            variance_pct,
-            cfg.variance_tolerance_pct,
-            variance_pct <= cfg.variance_tolerance_pct,
-        )],
+        [
+            (
+                cfg.pipeline_name,
+                run_date,
+                total_rows,
+                variances,
+                variance_pct,
+                cfg.variance_tolerance_pct,
+                variance_pct <= cfg.variance_tolerance_pct,
+            )
+        ],
         schema="pipeline_name string, run_date string, total_rows long, "
-               "variance_rows long, variance_pct double, tolerance_pct double, "
-               "within_tolerance boolean",
+        "variance_rows long, variance_pct double, tolerance_pct double, "
+        "within_tolerance boolean",
     )
 
     # Sample variances for triage — capped so we don't blow up the result table.
-    sampled = classified.limit(500).withColumn("pipeline_name", F.lit(cfg.pipeline_name)) \
-                                   .withColumn("run_date", F.lit(run_date))
+    sampled = (
+        classified.limit(500)
+        .withColumn("pipeline_name", F.lit(cfg.pipeline_name))
+        .withColumn("run_date", F.lit(run_date))
+    )
 
-    sampled.write.format("delta").mode("append") \
-        .saveAsTable("audit.reconciliation_variance_samples")
+    sampled.write.format("delta").mode("append").saveAsTable("audit.reconciliation_variance_samples")
 
     return summary
 
 
-def cutover_ready(
-    spark: SparkSession, pipeline_name: str, consecutive_green_days: int = 7
-) -> bool:
+def cutover_ready(spark: SparkSession, pipeline_name: str, consecutive_green_days: int = 7) -> bool:
     """Return True iff variance has been within tolerance for N consecutive days."""
     history = (
         spark.table("audit.reconciliation_results")

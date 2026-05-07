@@ -18,17 +18,21 @@
 # COMMAND ----------
 
 import sys
+
 sys.path.append("/Workspace/Repos/people10_usecase/poc/databricks")  # MOCK: real path varies
 
-from datetime import timezone
 from delta.tables import DeltaTable
-from pyspark.sql import functions as F
-from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType, DoubleType, TimestampType, ArrayType,
-)
-
 from lib.pipeline_run import PipelineRun
 from lib.scd_helpers import add_row_hash
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    ArrayType,
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+)
 
 # COMMAND ----------
 
@@ -40,27 +44,41 @@ from lib.scd_helpers import add_row_hash
 
 # COMMAND ----------
 
-SAP_SCHEMA = StructType([
-    StructField("production_order_id", StringType(), nullable=False),
-    StructField("plant_code", StringType(), nullable=False),
-    StructField("plant_timezone", StringType(), nullable=False),  # e.g. "Asia/Kolkata"
-    StructField("material_id", StringType(), nullable=False),
-    StructField("quantity", DoubleType()),
-    StructField("uom", StringType()),
-    StructField("posting_date_local", StringType()),               # SAP gives string
-    StructField("created_by", StringType()),
-    StructField("status", StringType()),
-    StructField("customer", StructType([
-        StructField("customer_id", StringType()),
-        StructField("customer_name", StringType()),
-        StructField("region", StringType()),
-    ])),
-    StructField("items", ArrayType(StructType([
-        StructField("item_no", IntegerType()),
-        StructField("component_id", StringType()),
-        StructField("required_qty", DoubleType()),
-    ]))),
-])
+SAP_SCHEMA = StructType(
+    [
+        StructField("production_order_id", StringType(), nullable=False),
+        StructField("plant_code", StringType(), nullable=False),
+        StructField("plant_timezone", StringType(), nullable=False),  # e.g. "Asia/Kolkata"
+        StructField("material_id", StringType(), nullable=False),
+        StructField("quantity", DoubleType()),
+        StructField("uom", StringType()),
+        StructField("posting_date_local", StringType()),  # SAP gives string
+        StructField("created_by", StringType()),
+        StructField("status", StringType()),
+        StructField(
+            "customer",
+            StructType(
+                [
+                    StructField("customer_id", StringType()),
+                    StructField("customer_name", StringType()),
+                    StructField("region", StringType()),
+                ]
+            ),
+        ),
+        StructField(
+            "items",
+            ArrayType(
+                StructType(
+                    [
+                        StructField("item_no", IntegerType()),
+                        StructField("component_id", StringType()),
+                        StructField("required_qty", DoubleType()),
+                    ]
+                )
+            ),
+        ),
+    ]
+)
 
 BRONZE_PATH = "abfss://bronze@chandanlake.dfs.core.windows.net/sap/production_order/"
 SILVER_TABLE = "silver.production_order"
@@ -74,11 +92,7 @@ with PipelineRun(
 ) as run:
     last_wm = run.watermark()  # ISO-8601 timestamp string or None on first run
 
-    bronze = (
-        spark.read.format("json")
-        .schema(SAP_SCHEMA)
-        .load(BRONZE_PATH)
-    )
+    bronze = spark.read.format("json").schema(SAP_SCHEMA).load(BRONZE_PATH)
 
     # Watermark filter — incremental by ingest_date partition; full-history on first run.
     if last_wm is not None:
@@ -86,8 +100,7 @@ with PipelineRun(
 
     # ---- flatten + UTC normalise -------------------------------------------------
     flat = (
-        bronze
-        .withColumn(
+        bronze.withColumn(
             "posting_ts_local",
             F.to_timestamp("posting_date_local", "yyyy-MM-dd HH:mm:ss"),
         )
@@ -106,27 +119,29 @@ with PipelineRun(
 
     # ---- row hash for change detection ------------------------------------------
     hash_cols = [
-        "production_order_id", "plant_code", "material_id", "quantity", "uom",
-        "posting_ts_utc", "status", "customer_id", "item_count",
+        "production_order_id",
+        "plant_code",
+        "material_id",
+        "quantity",
+        "uom",
+        "posting_ts_utc",
+        "status",
+        "customer_id",
+        "item_count",
     ]
-    hashed = add_row_hash(flat, hash_cols).withColumn(
-        "ingested_at", F.current_timestamp()
-    )
+    hashed = add_row_hash(flat, hash_cols).withColumn("ingested_at", F.current_timestamp())
 
     # ---- merge into Silver ------------------------------------------------------
     if not spark.catalog.tableExists(SILVER_TABLE):
         # First-time bootstrap. In production this is a Phase-2 setup task,
         # not a runtime check — we leave it here for the PoC.
-        hashed.write.format("delta").partitionBy("plant_code") \
-            .saveAsTable(SILVER_TABLE)
+        hashed.write.format("delta").partitionBy("plant_code").saveAsTable(SILVER_TABLE)
     else:
         target = DeltaTable.forName(spark, SILVER_TABLE)
         target.alias("t").merge(
             hashed.alias("s"),
             "t.production_order_id = s.production_order_id",
-        ).whenMatchedUpdateAll(
-            condition="t.row_hash <> s.row_hash"
-        ).whenNotMatchedInsertAll().execute()
+        ).whenMatchedUpdateAll(condition="t.row_hash <> s.row_hash").whenNotMatchedInsertAll().execute()
 
     # ---- audit metrics + watermark -----------------------------------------------
     rows_in = hashed.count()

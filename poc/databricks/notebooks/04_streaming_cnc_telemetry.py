@@ -19,15 +19,19 @@
 # COMMAND ----------
 
 import sys
+
 sys.path.append("/Workspace/Repos/people10_usecase/poc/databricks")
 
 from delta.tables import DeltaTable
+from lib.format_readers import read_eventhubs_kafka
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
-    StructType, StructField, StringType, DoubleType, TimestampType,
+    DoubleType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
 )
-
-from lib.format_readers import read_eventhubs_kafka
 
 # COMMAND ----------
 
@@ -52,16 +56,18 @@ spark.conf.set(
 
 # COMMAND ----------
 
-OPC_PAYLOAD_SCHEMA = StructType([
-    StructField("plant_code", StringType(), nullable=False),
-    StructField("machine_id", StringType(), nullable=False),
-    StructField("event_ts", TimestampType(), nullable=False),
-    StructField("vibration_g", DoubleType()),
-    StructField("temperature_c", DoubleType()),
-    StructField("spindle_rpm", DoubleType()),
-    StructField("feed_rate_mm_min", DoubleType()),
-    StructField("tool_id", StringType()),
-])
+OPC_PAYLOAD_SCHEMA = StructType(
+    [
+        StructField("plant_code", StringType(), nullable=False),
+        StructField("machine_id", StringType(), nullable=False),
+        StructField("event_ts", TimestampType(), nullable=False),
+        StructField("vibration_g", DoubleType()),
+        StructField("temperature_c", DoubleType()),
+        StructField("spindle_rpm", DoubleType()),
+        StructField("feed_rate_mm_min", DoubleType()),
+        StructField("tool_id", StringType()),
+    ]
+)
 
 # COMMAND ----------
 
@@ -75,8 +81,7 @@ raw = read_eventhubs_kafka(
 )
 
 parsed = (
-    raw
-    .selectExpr("CAST(value AS STRING) AS payload", "timestamp AS kafka_ts")
+    raw.selectExpr("CAST(value AS STRING) AS payload", "timestamp AS kafka_ts")
     .withColumn("event", F.from_json("payload", OPC_PAYLOAD_SCHEMA))
     .select("event.*", "kafka_ts")
     .where(F.col("plant_code").isNotNull() & F.col("machine_id").isNotNull())
@@ -85,8 +90,7 @@ parsed = (
 
 # ---- 1-minute stateful rollup -----------------------------------------------
 agg = (
-    parsed
-    .groupBy(
+    parsed.groupBy(
         F.window("event_ts", "1 minute").alias("w"),
         F.col("plant_code"),
         F.col("machine_id"),
@@ -104,13 +108,18 @@ agg = (
         F.col("machine_id"),
         F.col("w.start").alias("window_start_utc"),
         F.col("w.end").alias("window_end_utc"),
-        "vibration_g_avg", "vibration_g_p100", "vibration_g_p95",
-        "temperature_c_avg", "spindle_rpm_avg", "event_count",
+        "vibration_g_avg",
+        "vibration_g_p100",
+        "vibration_g_p95",
+        "temperature_c_avg",
+        "spindle_rpm_avg",
+        "event_count",
         F.current_timestamp().alias("ingested_at"),
     )
 )
 
 # COMMAND ----------
+
 
 def upsert_to_silver(microbatch_df, batch_id: int) -> None:
     """Idempotent MERGE — same (plant_code, machine_id, window_start_utc)
@@ -120,22 +129,18 @@ def upsert_to_silver(microbatch_df, batch_id: int) -> None:
         return
 
     if not spark.catalog.tableExists(SILVER_TABLE):
-        microbatch_df.write.format("delta") \
-            .partitionBy("plant_code") \
-            .saveAsTable(SILVER_TABLE)
+        microbatch_df.write.format("delta").partitionBy("plant_code").saveAsTable(SILVER_TABLE)
         return
 
     target = DeltaTable.forName(spark, SILVER_TABLE)
     target.alias("t").merge(
         microbatch_df.alias("s"),
-        "t.plant_code = s.plant_code AND t.machine_id = s.machine_id "
-        "AND t.window_start_utc = s.window_start_utc",
+        "t.plant_code = s.plant_code AND t.machine_id = s.machine_id " "AND t.window_start_utc = s.window_start_utc",
     ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
 
 
 query = (
-    agg.writeStream
-    .foreachBatch(upsert_to_silver)
+    agg.writeStream.foreachBatch(upsert_to_silver)
     .option("checkpointLocation", CHECKPOINT)
     .trigger(processingTime=TRIGGER_INTERVAL)
     .queryName("cnc_telemetry_1min_oee")

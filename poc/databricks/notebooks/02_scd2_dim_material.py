@@ -10,20 +10,25 @@
 # COMMAND ----------
 
 import sys
-sys.path.append("/Workspace/Repos/people10_usecase/poc/databricks")
 
-from pyspark.sql import functions as F
+sys.path.append("/Workspace/Repos/people10_usecase/poc/databricks")
 
 from lib.pipeline_run import PipelineRun
 from lib.scd_helpers import add_row_hash, merge_scd2
+from pyspark.sql import functions as F
 
 # COMMAND ----------
 
 DIM_TABLE = "gold.dim_material"
 HASH_COLS = [
-    "material_id", "material_description", "material_group",
-    "uom", "spec_revision", "criticality_class",
-    "is_aerospace_grade", "supplier_default_id",
+    "material_id",
+    "material_description",
+    "material_group",
+    "uom",
+    "spec_revision",
+    "criticality_class",
+    "is_aerospace_grade",
+    "supplier_default_id",
 ]
 BUSINESS_KEYS = ["material_id"]
 
@@ -34,26 +39,22 @@ with PipelineRun(
     source_system="SAP_S4HANA+TEAMCENTER",
     entity="dim_material",
 ) as run:
-    src = (
-        spark.table("silver.material_master")
-        .select(
-            "material_id",
-            "material_description",
-            "material_group",
-            "uom",
-            "spec_revision",
-            "criticality_class",
-            "is_aerospace_grade",
-            "supplier_default_id",
-        )
+    src = spark.table("silver.material_master").select(
+        "material_id",
+        "material_description",
+        "material_group",
+        "uom",
+        "spec_revision",
+        "criticality_class",
+        "is_aerospace_grade",
+        "supplier_default_id",
     )
     src_hashed = add_row_hash(src, HASH_COLS)
 
     if not spark.catalog.tableExists(DIM_TABLE):
         # First load — every row is "current".
         bootstrap = (
-            src_hashed
-            .withColumn("effective_from", F.current_timestamp())
+            src_hashed.withColumn("effective_from", F.current_timestamp())
             .withColumn("effective_to", F.lit(None).cast("timestamp"))
             .withColumn("is_current", F.lit(True))
         )

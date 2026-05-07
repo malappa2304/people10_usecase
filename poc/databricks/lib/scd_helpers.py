@@ -98,10 +98,7 @@ def merge_scd2(
     to_insert = (
         source_df.alias("s")
         .join(current_hashes.alias("c"), join_cond, "left")
-        .where(
-            (F.col("c.__current_hash").isNull())
-            | (F.col(f"s.{hash_col}") != F.col("c.__current_hash"))
-        )
+        .where((F.col("c.__current_hash").isNull()) | (F.col(f"s.{hash_col}") != F.col("c.__current_hash")))
         .select("s.*")
         .withColumn(effective_from, F.current_timestamp())
         .withColumn(effective_to, F.lit(None).cast("timestamp"))

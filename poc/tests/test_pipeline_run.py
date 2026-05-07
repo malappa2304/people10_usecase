@@ -11,7 +11,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from databricks.lib.pipeline_run import PipelineRun
 
 
@@ -19,14 +18,20 @@ def _stub_spark() -> MagicMock:
     """A spark stub that records every .sql() call."""
     spark = MagicMock(name="spark")
     spark.sql = MagicMock(return_value=MagicMock())
-    spark.table = MagicMock(return_value=MagicMock(
-        where=MagicMock(return_value=MagicMock(
-            select=MagicMock(return_value=MagicMock(
-                limit=MagicMock(return_value=MagicMock(collect=MagicMock(return_value=[])))
-            )),
-            count=MagicMock(return_value=1),
-        ))
-    ))
+    spark.table = MagicMock(
+        return_value=MagicMock(
+            where=MagicMock(
+                return_value=MagicMock(
+                    select=MagicMock(
+                        return_value=MagicMock(
+                            limit=MagicMock(return_value=MagicMock(collect=MagicMock(return_value=[])))
+                        )
+                    ),
+                    count=MagicMock(return_value=1),
+                )
+            )
+        )
+    )
     return spark
 
 
@@ -38,8 +43,8 @@ def test_pipelinerun_writes_start_and_end_on_success():
 
     sql_calls = [c.args[0] for c in spark.sql.call_args_list]
     started = [s for s in sql_calls if "INSERT INTO audit.pipeline_run" in s and "RUNNING" in s]
-    ended   = [s for s in sql_calls if "UPDATE audit.pipeline_run"      in s and "SUCCESS" in s]
-    wm      = [s for s in sql_calls if "MERGE INTO audit.pipeline_watermark" in s]
+    ended = [s for s in sql_calls if "UPDATE audit.pipeline_run" in s and "SUCCESS" in s]
+    wm = [s for s in sql_calls if "MERGE INTO audit.pipeline_watermark" in s]
 
     assert len(started) == 1
     assert len(ended) == 1
@@ -55,7 +60,7 @@ def test_pipelinerun_marks_failed_on_exception_and_does_not_commit_watermark():
 
     sql_calls = [c.args[0] for c in spark.sql.call_args_list]
     failed_updates = [s for s in sql_calls if "UPDATE audit.pipeline_run" in s and "FAILED" in s]
-    wm_commits     = [s for s in sql_calls if "MERGE INTO audit.pipeline_watermark" in s]
+    wm_commits = [s for s in sql_calls if "MERGE INTO audit.pipeline_watermark" in s]
 
     assert len(failed_updates) == 1
     assert len(wm_commits) == 0, "Watermark must NOT advance on failure"
@@ -69,7 +74,8 @@ def test_metric_kv_is_serialised_into_metrics_json():
         run.metric("note", "all good")
 
     update_call = next(
-        c.args[0] for c in spark.sql.call_args_list
+        c.args[0]
+        for c in spark.sql.call_args_list
         if "UPDATE audit.pipeline_run" in c.args[0] and "SUCCESS" in c.args[0]
     )
     assert "rows_in" in update_call

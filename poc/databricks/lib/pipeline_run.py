@@ -33,7 +33,6 @@ watermark is *not* advanced, and the exception re-raises so ADF sees a failure.
 from __future__ import annotations
 
 import contextlib
-import os
 import socket
 import traceback
 import uuid
@@ -43,7 +42,6 @@ from typing import Any, Optional
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-
 
 _AUDIT_TABLE = "audit.pipeline_run"
 _LOCK_TABLE = "audit.pipeline_lock"
@@ -107,10 +105,7 @@ class PipelineRun:
         """
         rows = (
             self.spark.table(_WATERMARK_TABLE)
-            .where(
-                (F.col("source_system") == self.source_system)
-                & (F.col("entity") == self.entity)
-            )
+            .where((F.col("source_system") == self.source_system) & (F.col("entity") == self.entity))
             .select("watermark_value")
             .limit(1)
             .collect()
@@ -155,9 +150,7 @@ class PipelineRun:
                 .count()
             )
             if held == 0:
-                raise RuntimeError(
-                    f"Pipeline '{self.name}' is already running — refusing to start."
-                )
+                raise RuntimeError(f"Pipeline '{self.name}' is already running — refusing to start.")
             self._lock_acquired = True
         except Exception:
             # If the lock table doesn't exist yet (first deployment), don't crash.
@@ -169,8 +162,7 @@ class PipelineRun:
             return
         with contextlib.suppress(Exception):
             self.spark.sql(
-                f"DELETE FROM {_LOCK_TABLE} "
-                f"WHERE pipeline_name = '{self.name}' AND run_id = '{self.run_id}'"
+                f"DELETE FROM {_LOCK_TABLE} " f"WHERE pipeline_name = '{self.name}' AND run_id = '{self.run_id}'"
             )
 
     def _write_start_row(self) -> None:

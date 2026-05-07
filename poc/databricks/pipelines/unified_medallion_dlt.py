@@ -40,7 +40,11 @@
 import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
-    StructType, StructField, StringType, DoubleType, TimestampType,
+    DoubleType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
 )
 
 # COMMAND ----------
@@ -50,34 +54,38 @@ from pyspark.sql.types import (
 
 # COMMAND ----------
 
-OPC_PAYLOAD_SCHEMA = StructType([
-    StructField("plant_code",        StringType(),    nullable=False),
-    StructField("machine_id",        StringType(),    nullable=False),
-    StructField("event_ts",          TimestampType(), nullable=False),
-    StructField("vibration_g",       DoubleType()),
-    StructField("temperature_c",     DoubleType()),
-    StructField("spindle_rpm",       DoubleType()),
-    StructField("feed_rate_mm_min",  DoubleType()),
-    StructField("tool_id",           StringType()),
-])
+OPC_PAYLOAD_SCHEMA = StructType(
+    [
+        StructField("plant_code", StringType(), nullable=False),
+        StructField("machine_id", StringType(), nullable=False),
+        StructField("event_ts", TimestampType(), nullable=False),
+        StructField("vibration_g", DoubleType()),
+        StructField("temperature_c", DoubleType()),
+        StructField("spindle_rpm", DoubleType()),
+        StructField("feed_rate_mm_min", DoubleType()),
+        StructField("tool_id", StringType()),
+    ]
+)
 
-SAP_SCHEMA = StructType([
-    StructField("production_order_id", StringType(), nullable=False),
-    StructField("plant_code",          StringType(), nullable=False),
-    StructField("plant_timezone",      StringType(), nullable=False),
-    StructField("material_id",         StringType(), nullable=False),
-    StructField("quantity",            DoubleType()),
-    StructField("uom",                 StringType()),
-    StructField("posting_date_local",  StringType()),
-    StructField("created_by",          StringType()),
-    StructField("status",              StringType()),
-])
+SAP_SCHEMA = StructType(
+    [
+        StructField("production_order_id", StringType(), nullable=False),
+        StructField("plant_code", StringType(), nullable=False),
+        StructField("plant_timezone", StringType(), nullable=False),
+        StructField("material_id", StringType(), nullable=False),
+        StructField("quantity", DoubleType()),
+        StructField("uom", StringType()),
+        StructField("posting_date_local", StringType()),
+        StructField("created_by", StringType()),
+        StructField("status", StringType()),
+    ]
+)
 
 # Pipeline-level config keys (set in the DLT pipeline definition / databricks.yml)
-EH_BOOTSTRAP    = spark.conf.get("eh_bootstrap")          # Event Hubs Kafka endpoint
-EH_TOPIC        = spark.conf.get("eh_topic", "cnc-telemetry")
-SAP_BRONZE_PATH = spark.conf.get("sap_bronze_path")       # ADLS path
-SCHEMAS_PATH    = spark.conf.get("schemas_path")          # Auto Loader schema location
+EH_BOOTSTRAP = spark.conf.get("eh_bootstrap")  # Event Hubs Kafka endpoint
+EH_TOPIC = spark.conf.get("eh_topic", "cnc-telemetry")
+SAP_BRONZE_PATH = spark.conf.get("sap_bronze_path")  # ADLS path
+SCHEMAS_PATH = spark.conf.get("schemas_path")  # Auto Loader schema location
 
 # COMMAND ----------
 
@@ -86,30 +94,31 @@ SCHEMAS_PATH    = spark.conf.get("schemas_path")          # Auto Loader schema l
 
 # COMMAND ----------
 
+
 @dlt.table(
     name="bronze_cnc_telemetry",
     comment="OPC-UA telemetry events streaming from CNC machines via Event Hubs (Kafka API). 12K events/sec peak.",
     table_properties={
         "quality": "bronze",
         "delta.autoOptimize.optimizeWrite": "true",
-        "delta.autoOptimize.autoCompact":   "true",
+        "delta.autoOptimize.autoCompact": "true",
     },
 )
 def bronze_cnc_telemetry():
     return (
-        spark.readStream
-        .format("kafka")
+        spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", EH_BOOTSTRAP)
-        .option("subscribe",               EH_TOPIC)
+        .option("subscribe", EH_TOPIC)
         .option("kafka.security.protocol", "SASL_SSL")
-        .option("startingOffsets",         "latest")
-        .option("maxOffsetsPerTrigger",    100_000)   # bound the micro-batch
+        .option("startingOffsets", "latest")
+        .option("maxOffsetsPerTrigger", 100_000)  # bound the micro-batch
         .load()
         .selectExpr(
             "CAST(value AS STRING) AS payload",
             "timestamp AS kafka_ingest_ts",
         )
     )
+
 
 # COMMAND ----------
 
@@ -122,6 +131,7 @@ def bronze_cnc_telemetry():
 
 # COMMAND ----------
 
+
 @dlt.table(
     name="bronze_sap_production_order",
     comment="SAP S/4HANA production-order JSON files arriving in ADLS Bronze. Auto Loader for incremental ingestion.",
@@ -130,12 +140,13 @@ def bronze_cnc_telemetry():
 def bronze_sap_production_order():
     return (
         spark.readStream.format("cloudFiles")
-        .option("cloudFiles.format",                "json")
-        .option("cloudFiles.schemaEvolutionMode",   "addNewColumns")
-        .option("cloudFiles.schemaLocation",        f"{SCHEMAS_PATH}/sap_po")
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("cloudFiles.schemaLocation", f"{SCHEMAS_PATH}/sap_po")
         .schema(SAP_SCHEMA)
         .load(SAP_BRONZE_PATH)
     )
+
 
 # COMMAND ----------
 
@@ -143,6 +154,7 @@ def bronze_sap_production_order():
 # MAGIC ## SILVER — streaming, with watermark and three DLT severity tiers
 
 # COMMAND ----------
+
 
 @dlt.table(
     name="silver_cnc_telemetry_1min",
@@ -164,8 +176,7 @@ def silver_cnc_telemetry_1min():
         .withWatermark("event_ts", "10 minutes")
     )
     return (
-        parsed
-        .groupBy(
+        parsed.groupBy(
             F.window("event_ts", "1 minute").alias("w"),
             "plant_code",
             "machine_id",
@@ -183,11 +194,16 @@ def silver_cnc_telemetry_1min():
             "machine_id",
             F.col("w.start").alias("window_start_utc"),
             F.col("w.end").alias("window_end_utc"),
-            "vibration_g_avg", "vibration_g_p95", "vibration_g_max",
-            "temperature_c_avg", "spindle_rpm_avg", "event_count",
+            "vibration_g_avg",
+            "vibration_g_p95",
+            "vibration_g_max",
+            "temperature_c_avg",
+            "spindle_rpm_avg",
+            "event_count",
             F.current_timestamp().alias("ingested_at"),
         )
     )
+
 
 # COMMAND ----------
 
@@ -201,13 +217,14 @@ def silver_cnc_telemetry_1min():
 
 # COMMAND ----------
 
+
 @dlt.table(
     name="silver_sap_production_order",
     comment="Flattened SAP production order with plant-local → UTC normalisation and SHA-256 row hash for change detection.",
 )
-@dlt.expect_or_fail("non_null_pk",   "production_order_id IS NOT NULL")
-@dlt.expect_or_drop("known_plant",   "plant_code RLIKE '^[A-Z]{3}-[0-9]+$'")
-@dlt.expect("future_posting_warn",   "posting_ts_utc <= current_timestamp() + INTERVAL 7 DAYS")
+@dlt.expect_or_fail("non_null_pk", "production_order_id IS NOT NULL")
+@dlt.expect_or_drop("known_plant", "plant_code RLIKE '^[A-Z]{3}-[0-9]+$'")
+@dlt.expect("future_posting_warn", "posting_ts_utc <= current_timestamp() + INTERVAL 7 DAYS")
 def silver_sap_production_order():
     return (
         dlt.read_stream("bronze_sap_production_order")
@@ -225,10 +242,10 @@ def silver_sap_production_order():
                 F.concat_ws(
                     "||",
                     F.coalesce(F.col("production_order_id").cast("string"), F.lit("\x00")),
-                    F.coalesce(F.col("plant_code").cast("string"),          F.lit("\x00")),
-                    F.coalesce(F.col("material_id").cast("string"),         F.lit("\x00")),
-                    F.coalesce(F.col("quantity").cast("string"),            F.lit("\x00")),
-                    F.coalesce(F.col("status").cast("string"),              F.lit("\x00")),
+                    F.coalesce(F.col("plant_code").cast("string"), F.lit("\x00")),
+                    F.coalesce(F.col("material_id").cast("string"), F.lit("\x00")),
+                    F.coalesce(F.col("quantity").cast("string"), F.lit("\x00")),
+                    F.coalesce(F.col("status").cast("string"), F.lit("\x00")),
                 ),
                 256,
             ),
@@ -236,6 +253,7 @@ def silver_sap_production_order():
         .withColumn("ingested_at", F.current_timestamp())
         .drop("posting_date_local", "posting_ts_local")
     )
+
 
 # COMMAND ----------
 
@@ -257,9 +275,9 @@ dlt.apply_changes(
     target="silver_dim_material",
     source="silver_sap_production_order",
     keys=["material_id"],
-    sequence_by=F.col("posting_ts_utc"),     # event ordering for SCD2 history
+    sequence_by=F.col("posting_ts_utc"),  # event ordering for SCD2 history
     stored_as_scd_type=2,
-    track_history_column_list=["uom", "status"],   # only track real attribute changes
+    track_history_column_list=["uom", "status"],  # only track real attribute changes
 )
 
 # COMMAND ----------
@@ -274,6 +292,7 @@ dlt.apply_changes(
 # MAGIC unified.**
 
 # COMMAND ----------
+
 
 @dlt.table(
     name="gold_machine_oee_5min",
