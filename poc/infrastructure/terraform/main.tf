@@ -120,8 +120,10 @@ resource "azurerm_storage_management_policy" "lifecycle" {
     }
     actions {
       base_blob {
-        tier_to_cool_after_days_since_last_access_greater_than    = 30
-        tier_to_archive_after_days_since_last_access_greater_than = 90
+        # Modification-based tiering — no need to enable last_access_time
+        # tracking on the storage account (which has its own cost).
+        tier_to_cool_after_days_since_modification_greater_than    = 30
+        tier_to_archive_after_days_since_modification_greater_than = 90
       }
     }
   }
