@@ -1,9 +1,6 @@
 The People10 Solutions Lab — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
 
 The brief is generic ("a modern data platform"), so I picked manufacturing as the use case because it gave me realistic streaming + batch flows to demonstrate. The architecture choices, trade-offs, and trade-off rationale are all mine to defend.
-
-If you're a reviewer, the most useful 5 minutes are the [architecture diagram](docs/01_architecture_diagram.md) and the [executive summary](docs/02_design_document.md#1-executive-summary). The most useful 20 minutes adds the design doc end-to-end and a walk through the [unified DLT pipeline](poc/databricks/pipelines/unified_medallion_dlt.py).
-
 ---
 
 ## How I spent the 3 days
