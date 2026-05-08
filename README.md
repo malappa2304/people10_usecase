@@ -1,6 +1,9 @@
-The People10 Solutions Lab — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
+# People10 PoC — Cloud-Native Data Platform on Azure
+
+Hi, I'm Malappa. This is my take-home for the People10 Solutions Lab brief — three days of work to design and prototype a modern lakehouse on Azure that unifies streaming and batch, supports analytics, and gets data ready for AI/ML.
 
 The brief is generic ("a modern data platform"), so I picked manufacturing as the use case because it gave me realistic streaming + batch flows to demonstrate. The architecture choices, trade-offs, and trade-off rationale are all mine to defend.
+
 ---
 
 ## How I spent the 3 days
@@ -9,7 +12,7 @@ A quick honest log so a reviewer can see where the time actually went. Not a pro
 
 - **Day 1 (~6 hrs).** Read the brief twice. Settled on Azure within the first hour because the brief allowed any cloud and I know it best. Sketched the medallion architecture and drafted the design doc skeleton. Most of the time went into reasoning out the medallion + Delta Lake choice and the trade-off table. Picked manufacturing as the use case so streaming + batch flows would be concrete.
 - **Day 2 (~7 hrs).** Built the runnable pieces. The DLT pipeline took the longest — getting `apply_changes` and the streaming + batch unification right in one DAG was the part that needed the most care. Wrote the imperative notebooks with the `PipelineRun` audit chassis. Got bitten by SAP timezone normalisation; explicit `to_utc_timestamp(col, tz)` per row fixed it. Wrote the unit tests at the end of the day.
-- **Day 3 (~5 hrs).** Polish. Mermaid architecture diagram, Synapse DDL + analytics queries, CI workflow with the right shape, the TODO. Then a thorough QA pass that surfaced a YAML syntax bug and a handful of stale cross-references after I'd trimmed earlier drafts.
+- **Day 3 (~5 hrs).** Polish. Mermaid architecture diagram, Synapse DDL + analytics queries, the 5-stage CI/CD pipeline, the TODO. Then a thorough QA pass that surfaced a YAML syntax bug and a handful of stale cross-references after I'd trimmed earlier drafts.
 
 Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed in [`TODO.md`](TODO.md).
 
@@ -18,9 +21,10 @@ Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed
 1. **[`docs/01_architecture_diagram.md`](docs/01_architecture_diagram.md)** — one diagram, 1 minute.
 2. **[`docs/02_design_document.md`](docs/02_design_document.md)** — design covering the brief's 7 key areas, ~10 minutes.
 3. **[`poc/databricks/pipelines/unified_medallion_dlt.py`](poc/databricks/pipelines/unified_medallion_dlt.py)** — the central demo, ~5 minutes. One DLT pipeline ingests **streaming** (Event Hubs) **and** **batch** (Auto Loader) into the same medallion. This is the unification claim made literal.
-4. **[`TODO.md`](TODO.md)** — what I'd do next if I had more time, and what I'm uncertain about.
+4. **[`docs/03_cicd.md`](docs/03_cicd.md)** — what the 5-stage pipeline does and why, 3 minutes.
+5. **[`TODO.md`](TODO.md)** — what I'd do next if I had more time, and what I'm uncertain about.
 
-## WHat is the ask, and where it's covered
+## What the brief asked for, and where it's covered
 
 | Key Areas to Cover | Where in this repo |
 | -- | -- |
@@ -29,7 +33,7 @@ Roughly **18 hours of focused work over 3 days**. Big chunks not done are listed
 | Storage architecture | Design doc §5 · Terraform `main.tf` · Synapse DDL under `poc/synapse/ddl/` |
 | Cloud-native services & scalability | Design doc §6 |
 | Data quality, governance & security | Design doc §7 · DLT expectations inline in the pipeline |
-| CI/CD, monitoring & cost optimization | Design doc §8 · `.github/workflows/cicd.yml` (5-stage pipeline) · `Makefile` |
+| CI/CD, monitoring & cost optimization | Design doc §8 · [`docs/03_cicd.md`](docs/03_cicd.md) · `.github/workflows/cicd.yml` (5-stage pipeline: validate → lint → security → deploy → clean-up) |
 | Trade-offs & future evolution | Design doc §9 + §10 |
 
 ## Repo layout
@@ -40,11 +44,15 @@ people10_usecase/
 ├── TODO.md                     # what's next + things I'm uncertain about
 ├── Makefile                    # make test / lint / smoke / ci-local
 ├── databricks.yml              # Databricks Asset Bundle
+├── pyproject.toml              # ruff config
+├── requirements-dev.txt        # pinned dev deps for CI + local
+├── .yamllint.yml               # yamllint config
+├── .pre-commit-config.yaml     # local-first quality gates
 ├── .env.example                # local dev env-var template
 ├── docs/
 │   ├── 01_architecture_diagram.md
 │   ├── 02_design_document.md
-│   └── 03_presentation_deck_outline.md
+│   └── 03_cicd.md
 ├── poc/
 │   ├── databricks/
 │   │   ├── pipelines/          # DLT — unified streaming + batch
@@ -70,14 +78,14 @@ people10_usecase/
 
 ```bash
 make test         # pytest + chispa with coverage report
-make lint         # ruff check + format-check + mypy --strict + sqlfluff
+make lint         # ruff check + format-check + mypy --strict
 make ci-local     # everything CI runs, locally
 ```
 
 Or without `make`:
 
 ```bash
-pip install "pyspark==3.5.*" "delta-spark==3.2.*" "pytest==8.*" "pytest-cov==5.*" "chispa==0.10.*"
+pip install -r requirements-dev.txt
 PYTHONPATH=poc pytest poc/tests/ -v --cov=poc/databricks/lib
 ```
 
@@ -112,7 +120,7 @@ The fastest way to walk the notebook code end-to-end without standing up cloud i
 
 The line between "I built it" and "I designed it" matters, so I'm being explicit.
 
-**Runs end-to-end:** the three notebooks under `poc/databricks/notebooks/` against the sample data on Databricks Community Edition; the unified DLT pipeline once the bundle is deployed; the `pytest` suite (87% coverage on the audit chassis `pipeline_run.py`; other lib modules' tests are in TODO.md); CI on every PR.
+**Runs end-to-end:** the three notebooks under `poc/databricks/notebooks/` against the sample data on Databricks Community Edition; the unified DLT pipeline once the bundle is deployed; the `pytest` suite (87% coverage on the audit chassis `pipeline_run.py`; other lib modules' tests are in TODO.md); the 5-stage CI pipeline on every PR.
 
 **Designed but not provisioned:** the Synapse Dedicated pool (DDL is ready, no pool in the take-home env to apply against), the Cosmos DB online feature store (pattern in design doc §6, IaC not written), Microsoft Purview lineage scans (referenced, not wired), the rest of the Terraform networking + Synapse + monitoring modules (the foundation is in `main.tf` — each missing module would be ~50 lines).
 

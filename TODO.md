@@ -24,5 +24,5 @@ These I'd want to talk through with the team:
 
 ## Parked
 
-- A real slide deck — `docs/03_presentation_deck_outline.md` is what I'd present from. Building actual slides is low-leverage for the next day of work.
+- A real slide deck — would build from the design doc + architecture diagram on the day of the panel review. Low-leverage to invest in slides earlier.
 - SHA-pinning every GitHub Action — supply-chain hardening that matters in production but isn't going to win me anything in a take-home review.
