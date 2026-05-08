@@ -5,7 +5,7 @@ A concise speaking outline for the panel review. Eight slides, two minutes per s
 ---
 
 ## Slide 1 — Title and framing
-**Cloud-Native Data Platform on Azure — People10 Solutions Lab take-home**
+**Cloud-Native Data Platform on Azure — People10 Technologies**
 
 - 3-day brief: design + working prototype on one cloud
 - Cloud chosen: **Azure** (ADLS Gen2 · Databricks · Delta Lake · Synapse)
