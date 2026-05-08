@@ -1,6 +1,6 @@
 # Design Document — Cloud-Native Data Platform on Azure
 
-**3-day take-home for People10 Solutions Lab.**
+**People10 Technologies.**
 A modern lakehouse on Azure that unifies streaming and batch, supports analytics, and prepares data for AI/ML — mapped against the seven *Key Areas to Cover* from the brief.
 
 ---
