@@ -6,7 +6,7 @@
 #   - .pre-commit-config.yaml (consistency between local pre-commit and CI)
 #   - `make ci-local` (local mirror of what CI runs)
 #
-# Pin exactly. Bumps go through Dependabot, reviewed in PRs.
+# Pin exactly. Bumps go through reviewed PRs.
 # =============================================================================
 
 # ---- Python lint / type-check / format -------------------------------------

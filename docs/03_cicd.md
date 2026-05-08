@@ -60,7 +60,7 @@ What the stage demonstrates (when wired):
 - **Permissions least-privilege** — top-level `permissions: contents: read`. Jobs widen as they need to (`id-token: write` only where Azure OIDC is needed).
 - **Concurrency** — cancel-in-progress on PRs (avoid wasted CI), never cancel `dev`-branch runs (don't leave deploys half-applied).
 - **Pip cache** — `setup-python`'s `cache: pip` only on Stage 2 (where PySpark + Delta are 290+ MB); Stages 1 and 3 install small tools inline without caching.
-- **Action pinning** — major-version tags today; SHA pinning + `step-security/harden-runner` is the next supply-chain step. Dependabot is wired to drive the bumps.
+- **Action pinning** — major-version tags today; SHA pinning + `step-security/harden-runner` is the next supply-chain step.
 - **Single source of truth for dev deps** — [`requirements-dev.txt`](../requirements-dev.txt) is read by Stage 2 install + pre-commit + `make ci-local`. CI cache invalidates on its hash.
 
 ## Local mirror

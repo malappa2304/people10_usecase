@@ -19,9 +19,9 @@
 #   - Top-level least-privilege permissions; jobs widen as they need to.
 #   - Concurrency cancels in-progress runs on PRs; never on dev branch.
 #   - Path filters (dorny/paths-filter) skip stages whose paths didn't change.
-#   - Actions pinned to major version. Dependabot is wired to drive bumps;
-#     SHA pinning + step-security/harden-runner is the next supply-chain
-#     hardening step (see TODO.md).
+#   - Actions pinned to major version. SHA pinning +
+#     step-security/harden-runner is the next supply-chain hardening
+#     step (see TODO.md).
 ###############################################################################
 
 name: CI/CD Pipeline

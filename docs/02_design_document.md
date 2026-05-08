@@ -181,11 +181,10 @@ Cross-cutting design choices:
 
 - Top-level `permissions: contents: read`. Each job widens as it needs to (security-check adds `security-events: write`; deploy adds `id-token: write`; clean-up adds `actions: write` for artefact pruning).
 - Concurrency cancels in-progress runs on PRs (saves CI minutes); never on `dev` branch (half-finished deploys are worse than queued ones).
-- Actions pinned to major version. SHA pinning is the next supply-chain hardening step; Dependabot is wired to drive bumps.
+- Actions pinned to major version. SHA pinning is the next supply-chain hardening step.
 
 **Repo hygiene files** complement the pipeline:
 
-- [`.github/dependabot.yml`](../.github/dependabot.yml) — weekly bumps for Actions + Terraform providers.
 - [`.github/pull_request_template.md`](../.github/pull_request_template.md) — reviewer checklist mirroring the pipeline stages.
 - [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) — same lint + secret-scan locally, so issues are caught before they hit the pipeline.
 
