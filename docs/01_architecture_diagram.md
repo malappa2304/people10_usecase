@@ -6,27 +6,27 @@ A simple, end-to-end picture: streaming **and** batch land into the same **Datab
 flowchart TB
 
     %% ============== SOURCES ==============
-    subgraph S["📥 SOURCES"]
+    subgraph S["SOURCES"]
         direction LR
-        S1["⚡ <b>Streaming</b><br/>CNC machines · IoT<br/><i>Azure Event Hubs (Kafka API)</i><br/>~12K events/sec"]
-        S2["📦 <b>Batch</b><br/>SAP S/4HANA · MES · Teamcenter PLM<br/>Supplier files (SFTP / EDI)<br/><i>ADF + Auto Loader</i>"]
+        S1[" <b>Streaming</b><br/>CNC machines · IoT<br/><i>Azure Event Hubs (Kafka API)</i><br/>~12K events/sec"]
+        S2[" <b>Batch</b><br/>SAP S/4HANA · MES · Teamcenter PLM<br/>Supplier files (SFTP / EDI)<br/><i>ADF + Auto Loader</i>"]
     end
 
     %% ============== LAKEHOUSE ==============
-    subgraph L["🏛️ DATABRICKS LAKEHOUSE on DELTA LAKE — ADLS Gen2 (Central India)"]
+    subgraph L[" DATABRICKS LAKEHOUSE on DELTA LAKE — ADLS Gen2 (Central India)"]
         direction LR
-        B["<b>🥉 BRONZE</b><br/>raw · immutable<br/><i>streaming + batch land here</i><br/>Delta · 7-yr retention"]
-        SI["<b>🥈 SILVER</b><br/>cleansed · conformed<br/>SCD2 · ACID · time travel<br/>schema enforcement"]
-        G["<b>🥇 GOLD</b><br/>business facts + dims<br/>ready to serve<br/>fact_supplier_otd · fact_machine_telemetry · …"]
+        B["<b> BRONZE</b><br/>raw · immutable<br/><i>streaming + batch land here</i><br/>Delta · 7-yr retention"]
+        SI["<b> SILVER</b><br/>cleansed · conformed<br/>SCD2 · ACID · time travel<br/>schema enforcement"]
+        G["<b> GOLD</b><br/>business facts + dims<br/>ready to serve<br/>fact_supplier_otd · fact_machine_telemetry · …"]
         B ==> SI ==> G
     end
 
     %% ============== CONSUMPTION ==============
-    subgraph C["📊 CONSUMPTION"]
+    subgraph C[" CONSUMPTION"]
         direction LR
-        C1["⏱️ <b>Real-time insights</b><br/>Power BI live tiles<br/>OEE · supplier OTD<br/><i>sub-minute</i>"]
-        C2["📈 <b>Analytics</b><br/>Synapse Serverless (ad-hoc)<br/>Synapse Dedicated<br/>(50+ concurrent BI users)"]
-        C3["🧠 <b>AI / ML</b><br/>Feature Store<br/>offline (Delta + time travel)<br/>online (Cosmos DB <100ms)<br/><i>Predictive maintenance</i>"]
+        C1[" <b>Real-time insights</b><br/>Power BI live tiles<br/>OEE · supplier OTD<br/><i>sub-minute</i>"]
+        C2[" <b>Analytics</b><br/>Synapse Serverless (ad-hoc)<br/>Synapse Dedicated<br/>(50+ concurrent BI users)"]
+        C3[" <b>AI / ML</b><br/>Feature Store<br/>offline (Delta + time travel)<br/>online (Cosmos DB <100ms)<br/><i>Predictive maintenance</i>"]
     end
 
     S1 ==>|streaming| B
