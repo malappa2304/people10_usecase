@@ -1,6 +1,6 @@
 # People10 PoC — Cloud-Native Data Platform on Azure
 
-A 3-day take-home for the People10 Solutions Lab brief. End-to-end design + working prototype on Azure (ADLS Gen2 · Databricks · Delta Lake · Synapse) showing how a modern lakehouse unifies streaming and batch, supports analytics, and prepares data for AI/ML.
+A 3-day take-home for the People10 Technologies brief. End-to-end design + working prototype on Azure (ADLS Gen2 · Databricks · Delta Lake · Synapse) showing how a modern lakehouse unifies streaming and batch, supports analytics, and prepares data for AI/ML.
 
 — Malappa
 
